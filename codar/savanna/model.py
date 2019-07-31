@@ -27,6 +27,7 @@ import pdb
 from codar.savanna import status, machines, summit_helper
 from codar.savanna.exc import SavannaException
 from codar.savanna.node_layout import NodeLayout
+from codar.savanna.dynamic_util import DynamicUtil
 
 
 STDOUT_NAME = 'codar.workflow.stdout'
@@ -252,6 +253,9 @@ class Run(threading.Thread):
             except:
                 _log.exception(
                        'exception in Run callbacks after Run thread exception')
+
+    def get_start_time(self):
+        return self._start_time
 
     def _run(self):
         # Wait for runs that self depends on to finish
@@ -601,10 +605,34 @@ class Pipeline(object):
         wait until they are all finished."""
 
         _log.debug("Pipeline {} launching run components".format(self.id))
+        rmonitor = None
         for run in self.runs:
+            if run.name == 'rmonitor':
+                rmonitor = run
+                continue
+
             run.start()
             if run.sleep_after:
                 time.sleep(run.sleep_after)
+
+        if rmonitor is not None:
+            tau_fname = os.environ.get("TAU_ADIOS2_FILENAME", 'tau-metrics.bp')
+            rmap_json = DynamicUtil.generate_rfile(self, tau_fname)  
+            rmap_file = rmonitor.working_dir + "/" + "res_map.js"
+            args = rmonitor.args
+            args.append('--rmap_file')
+            args.append(rmap_file)
+            print(rmap_json)
+            with open(rmap_file, 'w') as fp:
+                json.dump(rmap_json, fp)
+            rmonitor.args = args
+            rmonitor.start()
+            if rmonitor.sleep_after:
+                time.sleep(rmonitor.sleep_after)
+
+
+    def get_assigned_nodes(self):
+        return list(self._nodes_assigned.queue)
 
     def _parse_node_layouts(self):
         """Only for Summit right now."""

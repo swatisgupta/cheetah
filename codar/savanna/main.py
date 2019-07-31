@@ -10,7 +10,7 @@ import os
 from codar.savanna.producer import JSONFilePipelineReader
 from codar.savanna.consumer import PipelineRunner
 from codar.savanna.runners import mpiexec, aprun, srun, jsrun
-
+from codar.savanna.dynamic import DynamicControls
 
 consumer = None
 
@@ -78,14 +78,20 @@ def main():
     t_consumer = threading.Thread(target=consumer.run_pipelines)
     t_consumer.start()
 
+    dynamic_cntrl = DynamicControls(consumer)
+    dynamic_cntrl.start()
+
     # producer runs in this main thread
     for pipeline in producer.read_pipelines():
+        # By Swati - check if the pipeline has to be monitored at runtime. If so, modify it accordingly 
+        # before the pipeline is allocated anything. This step avoids adding additional code in cheetah! 
+        pipeline = dynamic_cntrl.process_pipeline(pipeline)
         consumer.add_pipeline(pipeline)
 
     # signal that there are no more pipelines and thread should exit
     # when reached
     consumer.stop()
-
+    dynamic_cntrl.stop()
     # set up signal handlers for graceful exit
     def handle_signal_kill_consumer(signum, frame):
         consumer.kill_all()

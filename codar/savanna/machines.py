@@ -120,7 +120,7 @@ def _check_known_scheduler_options(supported_set, options):
 # container with all the machines.
 
 # NOTE: set process per node to avoid errors with sosflow calculations
-local = Machine('local', "local", "mpiexec", MachineNode, processes_per_node=1)
+local = Machine('local', "local", "mpiexec", MachineNode, processes_per_node=32)
 
 titan = Machine('titan', "pbs", "aprun", MachineNode,
                 processes_per_node=16, node_exclusive=True,
