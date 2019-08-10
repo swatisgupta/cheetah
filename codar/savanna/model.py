@@ -616,7 +616,7 @@ class Pipeline(object):
                 time.sleep(run.sleep_after)
 
         if rmonitor is not None:
-            tau_fname = os.environ.get("TAU_ADIOS2_FILENAME", 'tau-metrics.bp')
+            tau_fname = DynamicUtil.get_env(run.env, "TAU_ADIOS2_FILENAME", 'tau-metrics')
             rmap_json = DynamicUtil.generate_rfile(self, tau_fname)  
             rmap_file = rmonitor.working_dir + "/" + "res_map.js"
             args = rmonitor.args
@@ -632,7 +632,7 @@ class Pipeline(object):
 
 
     def get_assigned_nodes(self):
-        return list(self._nodes_assigned.queue)
+        return list(self.nodes_assigned.queue)
 
     def _parse_node_layouts(self):
         """Only for Summit right now."""

@@ -1,4 +1,5 @@
 import time
+import os
 
 class DynamicUtil():
 
@@ -7,6 +8,8 @@ class DynamicUtil():
        value = default
        if key in env.keys():
            value = env[key]
+       else:
+           value = os.environ.get(key, default) 
        return value
 
    @staticmethod
@@ -36,8 +39,8 @@ class DynamicUtil():
                n_ranks_per_node = 0
                if run.nodes_assigned is None:
                    n_ranks_per_node = run.tasks_per_node
-               elif asgn_node in run.nodes_assigned.values(): 
-                   n_ranks_per_node = run.nprocs/len(run.nodes_assigned)
+               elif asgn_node in run.nodes_assigned: 
+                   n_ranks_per_node = int(run.nprocs/len(run.nodes_assigned))
                    #index = DynamicUtil.get_index(run.nodes_assigned, asgn_node)
                if n_ranks_per_node != 0 and (index + 1) * n_ranks_per_node <= run.nprocs: # and run.get_start_time > time.time():
                    run_map['stream_nm'] = "../" + run.name + "/" + tau_fname + ".bp"

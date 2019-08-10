@@ -33,7 +33,7 @@ class DynamicControls():
         self.pipelines_oport = {}
         self.pipelines = {}
         self.monitors = {}
-        self.active_pipelines = {}
+        self.active_pipelines = []
         self.pipeline_sockets = {}
         self.pipeline_models = {}
         self.consumer = consumer
@@ -97,6 +97,7 @@ class DynamicControls():
                     continue
 
             #check pending requests :: ...
+            #print("Checking queued requests")
             with self.queue_lock:
                  while len(self.msg_queue) != 0:
                      msg = self.msg_queue.pop(0)
@@ -107,8 +108,8 @@ class DynamicControls():
             with self.pipeline_cond: 
                 for id in self.active_pipelines:    
                     model = self.pipeline_models[id]
-                    socket = self.pipeline_socket[id]
-                    request = create_request(model, datetime.now() - starttime , "req:get_update")
+                    socket = self.pipeline_sockets[id]
+                    request = self._create_request(model, datetime.now() - self.starttime , "req:get_update")
                     print("Sending request ", request, " to pipeline :", id)
                     socket.send_string(request)
                     message = socket.recv()
@@ -123,7 +124,8 @@ class DynamicControls():
             self.monitors[pipeline.id] = rmonitor
             self.pipeline_sockets[pipeline.id] = self._open_sender_connections(self.cur_oport) 
             self.pipeline_models[pipeline.id] = model
-                  
+            self.active_pipelines.append(pipeline.id) 
+      
     def process_pipeline(self, pipeline):
         adios2_strs = []
         adios2_engs = []
@@ -137,6 +139,7 @@ class DynamicControls():
         launch_mode = pipeline.launch_mode #what changes if job is MPMD??
         onefile = 0 
         hclib='papi'
+        '''
         print("OS environment : ", os.environ.keys())
         tau_fname = os.environ.get("TAU_ADIOS2_FILENAME", "tau-metrics") 
         onefile = int(os.environ.get("TAU_ADIOS2_ONE_FILE", 0))
@@ -144,10 +147,7 @@ class DynamicControls():
         trace = os.environ.get("TAU_TRACE", 1)
         profile = os.environ.get("TAU_PROFILE", 0)
         adios2_eng = os.environ.get("TAU_ADIOS2_ENGINE", "BPFile")
-        if 'PAPI' in metrics:
-            hclib='papi'
-        elif 'LIKWID' in metrics:
-            hclib='likwid'
+        '''
         i = -1
         for run in pipeline.runs:
             adios2_str = ""
@@ -156,17 +156,19 @@ class DynamicControls():
                 monitor = True
                 rmon_pos = i
                 rmonitor = run
-                continue
-            ''' 
+                continue 
             adios2_eng = ""
             tau_fname = DynamicUtil.get_env(run.env, "TAU_ADIOS2_FILENAME", "tau-metrics") 
             onefile = int(DynamicUtil.get_env(run.env, "TAU_ADIOS2_ONE_FILE", 0))
-            metrics = DynamicUtil.get_env(run.env, "TAU_METRICS")
-            trace = DynamicUtil.get_env(run.env, "TAU_TRACE")
-            profile = DynamicUtil.get_env(run.env, "TAU_PROFILE")
+            metrics = DynamicUtil.get_env(run.env, "TAU_METRICS", "")
+            trace = DynamicUtil.get_env(run.env, "TAU_TRACE", 0)
+            profile = DynamicUtil.get_env(run.env, "TAU_PROFILE", 0)
             adios2_eng = DynamicUtil.get_env(run.env,"TAU_ADIOS2_ENGINE", "BPFile")
-            adios2_str = run.name + "/" + DynamicUtil.get_env(run.env, "TAU_ADIOS2_FILENAME", "tau-metrics") + ".bp"
-            '''
+            if 'PAPI' in metrics:
+                hclib='papi'
+            elif 'LIKWID' in metrics:
+                hclib='likwid'
+     
             adios2_str = "../" + run.name + "/" + tau_fname + ".bp"
             if adios2_str is not "":
                 adios2_str = adios2_str
@@ -182,6 +184,7 @@ class DynamicControls():
         run = rmonitor 
         if run.name == "rmonitor":
             self.run_map[pipeline.id] = run_map[pipeline.id]
+            #run.exe = "python3 " + run.exe
             args=[]
             if run.args is not None:
                 args = run.args
