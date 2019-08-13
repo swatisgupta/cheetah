@@ -45,7 +45,7 @@ class DTH2Runner(Runner):
         self.exe = 'mpirun' 
         self.nprocs_arg = '-np'
         self.tasks_per_node_arg = '-N'
-        self.hostfile = '--hostfile'
+        self.rankfile = '--rankfile'
         self.bindings = '--report-bindings'
         self.env = '-x'
         self.cuda_enabled = cuda_enabled
@@ -65,8 +65,9 @@ class DTH2Runner(Runner):
                        self.nprocs_arg, str(run.nodes),
                        '--report-bindings']
 
-        if run.hostfile is not None: 
-            runner_args += ['--hostfile', run.hostfile]
+        #Note: need to add rankfile in Run class
+        if run.rankfile is not None: 
+            runner_args += ['--rankfile', run.rankfile]
         else:
             runner_args += [self.tasks_per_node_arg, str(run.tasks_per_node)]
 
