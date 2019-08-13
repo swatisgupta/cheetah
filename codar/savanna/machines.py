@@ -25,6 +25,15 @@ class MachineNode:
     def to_json(self):
         raise NotImplemented
 
+class DTH2CPUNode(MachineNode):
+    def __init__(self):
+        MachineNode.__init__(self, 20, 0)
+
+
+class DTH2GPUNode(MachineNode):
+    def __init__(self):
+        MachineNode.__init__(self, 20, 2)
+
 
 class SummitNode(MachineNode):
     def __init__(self):
@@ -149,6 +158,15 @@ theta = Machine('theta', "cobalt", "aprun", MachineNode,
 summit = Machine('summit', "ibm_lsf", "jsrun", SummitNode,
                  processes_per_node=42, node_exclusive=True,
                  scheduler_options=dict(project=""))
+
+
+deepthought2_cpu = Machine('deepthought2', "slurm", "mpirunc", DT2CPUNode,
+                  processes_per_node=20, node_exclusive=False,
+                  scheduler_options=dict(project=""))
+
+deepthought2_gpu = Machine('deepthought2', "slurm", "mpirung", DT2GPUNode,
+                  processes_per_node=20, node_exclusive=False,
+                  scheduler_options=dict(project=""))
 
 
 def get_by_name(name):
