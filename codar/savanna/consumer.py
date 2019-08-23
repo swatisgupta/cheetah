@@ -111,6 +111,39 @@ class PipelineRunner(object):
         with self.job_list_cv:
             self.job_list_cv.notify()
 
+    def stop_pipeline_runs(self, pipeline_id, run_names):
+        _log.warn("killing all pipelines and exiting consumer")
+        with self.pipelines_lock:
+            for pipeline in list(self._running_pipelines):
+                if pipeline.id == pipeline_id:
+                    pipeline.stop_runs(runs)
+
+    def stop_pipeline_all(self, pipeline_id):
+        str1 = "Stopping all runs of pipeline " + pipeline_id
+        _log.warn(str1)
+        with self.pipelines_lock:
+            for pipeline in list(self._running_pipelines):
+                if pipeline.id == pipeline_id:
+                    pipeline.stop_all()
+
+    def set_pipeline_restart(self, pipeline_id, restart):
+        str1 = "Setting restart of " + pipeline_id + " to "  +  str(restart)
+        _log.warn(str1)
+        with self.pipelines_lock:
+            print("All current pipelines  :", list(self._running_pipelines)) 
+            for pipe in list(self._running_pipelines):
+                print("checking for a match with ", pipe.id)
+                if pipe.id == pipeline_id:
+                    print("Found match")
+                    pipe.set_restart(restart)
+
+    def restart_pipeline_runs(self, pipeline_id, run_names, run_params):
+        _log.warn("killing all pipelines and exiting consumer")
+        with self.pipelines_lock:
+            for pipe in list(self._running_pipelines):
+                if pipe.id == pipeline_id:
+                    pipe.restart_runs(run_names, run_params)
+
     def kill_all(self):
         """Kill all running processes spawned by this consumer and don't
         start any new processes."""

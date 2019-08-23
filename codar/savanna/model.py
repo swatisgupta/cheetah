@@ -23,6 +23,7 @@ from queue import Queue
 import copy
 import json
 import pdb
+import copy
 
 from codar.savanna import status, machines, summit_helper
 from codar.savanna.exc import SavannaException
@@ -82,7 +83,8 @@ class Run(threading.Thread):
         self.working_dir = working_dir
         self.timeout = timeout
         self.nprocs = nprocs
-
+        self.monitor = {}
+        self._deliberatily_killed = False
         # res_set, nrs, and rs_per_host represent resource_set definition,
         # total no. of resource sets, and the no. of resource sets per host
         # respectively. Reqd for Summit.
@@ -313,11 +315,20 @@ class Run(threading.Thread):
                          self._p.returncode)
         self._save_walltime(self._end_time - self._start_time)
         self._save_returncode(self._p.returncode)
-        self._run_callbacks()
+        if self._deliberatily_killed == False:
+            self._run_callbacks()
+        else:
+            self._run_basic_callbacks()
 
     def _run_callbacks(self):
         _log.debug('%s _run_callbacks', self.log_prefix)
         for callback in self.callbacks:
+            callback(self)
+
+
+    def _run_basic_callbacks(self):
+        _log.debug('%s _run_basic_callbacks', self.log_prefix)
+        for callback in self.basic_callbacks:
             callback(self)
 
     def kill(self):
@@ -469,10 +480,12 @@ class Pipeline(object):
 
         self._state_lock = threading.Lock()
         self._running = False
+        self._done = False
         self._force_killed = False
         self._active_runs = set()
-
+        self.restart = False
         self._pipe_thread = None
+        self._temp_thread = None
         self._post_thread = None
         self.done_callbacks = set()
         self.fatal_callbacks = set()
@@ -631,6 +644,65 @@ class Pipeline(object):
                 time.sleep(rmonitor.sleep_after)
 
 
+    def _restart(self):
+        """Start all runs in the pipeline, along with threads that monitor
+        their progress and signal consumer when finished. Use join_all to
+        wait until they are all finished."""
+
+        _log.debug("Pipeline {} launching run components".format(self.id))
+        runs = []
+        self._pipe_thread.join()
+
+        for run in self.runs:
+            if run.name == 'rmonitor':
+                runs.append(run)
+                continue
+            run.join()
+
+            depends_on = None  
+
+            if run.depends_on_runs is not None:
+                tmp_run = run.depends_on_runs
+                depends_on = tmp_run.name
+ 
+            run1 = Run(run.name, run.exe, run.args, run.sched_args,
+                       run.env, run.working_dir,
+                       run.timeout, run.nprocs, run.res_set,
+                       run.stdout_path, run.stderr_path,
+                       run.return_path, run.walltime_path,
+                       run.log_prefix, run.sleep_after, depends_on, run.hostfile,
+                       run.runner_override )
+            run1.runner = run.runner
+            run1.callbacks = run.callbacks
+            run1.nodes = run.nodes
+            run1.tasks_per_node = run.tasks_per_node
+            run1.machine = run.machine
+            run1.nodes_assigned = run.nodes_assigned
+            run1.node_config = run.node_config
+            run.erf_file = run.erf_file  
+            runs.append(run1)
+
+        with self._state_lock:
+            self.runs = runs
+            self._active_runs.update(runs) 
+
+        for run in self.runs:
+            if run.name == 'rmonitor':
+                continue
+
+            for tmp_run in self.runs:
+                if tmp_run.name == run.depends_on_runs:
+                    run.depends_on_runs = tmp_run
+                    break
+
+            run.start()
+            if run.sleep_after:
+                time.sleep(run.sleep_after)
+
+        self._pipe_thread = self._temp_thread
+        self._temp_thread = None
+
+
     def get_assigned_nodes(self):
         return list(self.nodes_assigned.queue)
 
@@ -763,7 +835,85 @@ class Pipeline(object):
                     run.node_config.gpu[int(rank_id)].append(i)
 
         return list(codes_on_node)
+   
+    def set_restart(self, restart):
+        with self._state_lock:
+            self.restart = restart
 
+    def stop_runs(self, runs):
+        for run_name in runs:
+            for run in self._active_runs:
+                if run.name == run_name:
+                    print("Found run ", run.name, " with task", str(run.tasks_per_node) + "\n", flush = True)
+                    print("Killing the run" + run.name + "\n", flush = True ) 	 
+                    run._deliberatily_killed = True
+                    run.kill()
+
+    def stop_all(self):
+        for run in self._active_runs:
+             print("Found run ", run.name, " with task", str(run.tasks_per_node) + "\n", flush = True)
+             print("Killing the run" + run.name + "\n", flush = True ) 	 
+             run._deliberatily_killed = False 
+             run.kill()
+
+    def restart_runs(self, runs, runs_params):
+        print("Inside force restart\n")
+        for run_name in runs:
+            params = run_params[run_name]
+            new_args = params["args"]
+            mprocs = int(params["mprocs"])
+            command = params["command"]
+            self._pipe_thread.join()
+            new_procs = 0
+            run = None
+            found = 0
+            for run in self._active_runs:
+                if run.name == run_name: 
+                    print("Already running ")
+                    return
+            for run in self.runs:
+                 if run.name == run_name:
+                     print("Found the run in run name..")
+                     found = 1
+                     break  
+
+            if found == 1: #run.tasks_per_node >= run.nprocs + 1:
+                if command == "add_procs":
+                    new_procs = mprocs + run.nprocs
+                elif command == "term_procs":
+                    new_procs = run.nprocs - mprocs 
+
+                new_run = Run(run.name, run.exe, ast.literal_eval(new_args),
+                    run.env, run.working_dir,
+                    run.timeout, new_procs, run.res_set,
+                    run.stdout_path, run.stderr_path,
+                    run.return_path, run.walltime_path, run.log_prefix,
+                    run.sleep_after, run.depends_on_runs, run.hostfile, run.runner_override)
+
+                with self._state_lock:
+                    new_run.log_prefix = "%s:%s" % (self.id, new_run.name)                    
+                    new_run.set_runner(run.runner)
+                    self.runs.append(new_run)	
+                    new_run.add_callback(consumer.run_finished)
+                    new_run.add_callback(self.run_finished)
+                    new_run.add_basic_callback(self.run_finished)
+                    new_run.add_success_callback(self.add_rprocessid)
+                    self.runs.remove(run)	
+                    new_run.tasks_per_node = new_procs
+                    new_run.nodes = int(math.ceil(new_run.nprocs / new_run.tasks_per_node))
+                    print("Now starting a new job...\n", flush = True ) 	 
+                    self._active_runs.add(new_run)
+                    self.total_procs -= run.nprocs
+                    self.total_procs += new_procs
+                    #create a rankfile or erffile??
+                    new_run.start()
+                    if new_run.sleep_after:
+                        time.sleep(new_run.sleep_after)
+
+            else:
+                print("no of tasks exceed the resources on the node, skipping!", flush=True)
+                return   
+ 
     def run_finished(self, run):
         assert self._running
         run_done_callbacks = False
@@ -773,9 +923,24 @@ class Pipeline(object):
         # release nodes to the pipeline when Runs share nodes.
         self._release_nodes(run.nodes_assigned)
 
+        if run._deliberatily_killed == True:
+            _log.warn('%s run %s was killed intentionally', 
+                       self.log_prefix, run.name)
+            run._deliberatily_killed = False
+        else: 
+            _log.warn('%s run %s was not killed intentionally',
+                       self.log_prefix, run.name)
+        restart = False
         with self._state_lock:
             self._active_runs.remove(run)
-            if not self._active_runs:
+            if len(self._active_runs) == 1:
+                rn = list(self._active_runs)[0]
+                print("Last active run is ", rn.name) 
+                if self.restart == False and rn.name == 'rmonitor':
+                    rn.kill()
+                elif self.restart == True:
+                    restart = True
+            elif not self._active_runs:
                 self.run_post_process_script()
                 run_done_callbacks = True
             elif self.kill_on_partial_failure and not run.succeeded:
@@ -789,14 +954,21 @@ class Pipeline(object):
 
         # Note: must be done without lock, since callbacks may call
         # get_state or other methods that acquire lock.
-        if run_done_callbacks:
+        if restart == True:
+            self._temp_thread = threading.Thread(target=self._restart)
+            self._temp_thread.start()
+        elif run_done_callbacks:
             self._execute_done_callbacks()
+            self._done = True
+
 
     def run_post_process_script(self):
         if self.post_process_script is None:
             return None
+
         if self._force_killed:
             return None
+
         self._post_thread = threading.Thread(target=self._post_process_thread)
         self._post_thread.start()
 
@@ -837,6 +1009,8 @@ class Pipeline(object):
                 wf.write(str(end_time - start_time) + '\n')
         if rval != 0 and self.post_process_stop_on_failure:
             self._execute_fatal_callbacks()
+
+
 
     def add_done_callback(self, fn):
         self.done_callbacks.add(fn)
@@ -955,9 +1129,15 @@ class Pipeline(object):
 
     def join_all(self):
         assert self._running
+
+        while self._done == False:
+             continue
+
         self._pipe_thread.join()
+
         for run in self.runs:
             run.join()
+
         # Note: the _post_thread is set in the last run_finished
         # callback, which will be executed in one of the run threads
         # joined above, so this is guarenteed to be set if post process
