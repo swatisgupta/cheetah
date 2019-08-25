@@ -1,7 +1,3 @@
-from codar.savanna.machines import DTH2CPUNode
-import math
-import pdb
-
 
 class _ResourceMap:
     """
@@ -37,37 +33,34 @@ class _RANKMap:
 
 
 def create_rankfile(run):
-    assert not (run.node_config is None)), \
-        "Node Layout not found for Deepthought2. Please provide a node layout " \
-        "to the Sweep using the DTH2CPUNode or DTH2GPUNode object."
+    assert run.node_config is not None, \
+        "Node Layout not found for Deepthought2. " \
+        "Please provide a node layout to the Sweep using the " \
+        "DTH2CPUNode or DTH2GPUNode object."
 
     if run.node_config:
-        _create_rankfile_node_config(run.erf_file, run.exe, run.args,
-                                     run.nprocs, run.nodes,
+        _create_rankfile_node_config(run.dth_rankfile, run.nprocs, run.nodes,
                                      run.nodes_assigned, run.node_config)
 
 
-def _create_rankfile_node_config(hostfile_path, run_exe, run_args,
-                                 nprocs, num_nodes_reqd, nodes_assigned,
-                                 node_config):
+def _create_rankfile_node_config(rankfile_path, nprocs, num_nodes_reqd,
+                                 nodes_assigned, node_config):
     rank_map = _RANKMap(node_config).map
 
+    lines = ""
     for i in range(num_nodes_reqd):
         next_host = nodes_assigned[i]
         rank_offset = i*len(list(rank_map.keys()))
 
-        for i, rank_id in enumerate(rank_map.keys()):
+        for j, rank_id in enumerate(rank_map.keys()):
             res_map = rank_map[rank_id]
-            str += '\rank {} = +n{} '.format(i+rank_offset,
-                                                           next_host)
+            lines += '\rank {} = +n{} '.format(j+rank_offset, next_host)
             for index, core_id in enumerate(res_map.core_ids):
-                str += "slot={}:{}".format(core_id/10, core_id%10)
+                lines += "slot={}:{}".format(core_id/10, core_id % 10)
         
-            if i+rank_offset == nprocs-1:
+            if j+rank_offset == nprocs-1:
                 break
-        str += "\n"
+        lines += "\n"
 
     with open(rankfile_path, 'w') as f:
-        f.write(str)
-
-
+        f.write(lines)

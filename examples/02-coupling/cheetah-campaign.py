@@ -1,5 +1,7 @@
 from codar.cheetah import Campaign
 from codar.cheetah import parameters as p
+from codar.savanna.machines import SummitNode
+from codar.savanna.machines import DTH2CPUNode
 from codar.cheetah.parameters import SymLink
 import copy
 
@@ -22,7 +24,7 @@ class ProducerConsumer(Campaign):
     # CAMPAIGN SETTINGS
     #------------------
     # A list of machines that this campaign is supported on
-    supported_machines = ['local', 'titan', 'theta', 'summit']
+    supported_machines = ['local', 'titan', 'theta', 'summit', 'deepthought2_cpu']
 
     # Option to kill an experiment (just one experiment, not the full sweep or campaign) if one of the codes fails
     kill_on_partial_failure = True
@@ -52,15 +54,31 @@ class ProducerConsumer(Campaign):
     # Use ParamCmdLineArg to setup a command line arg, ParamCmdLineOption to setup a command line option, and so on.
     sweep1_parameters = [
             p.ParamRunner       ('producer', 'nprocs', [2]),
-            p.ParamRunner       ('mean_calc', 'nprocs', [1]),
-            p.ParamCmdLineArg   ('producer', 'array_size_per_pe', 1, [1024*1024, 2*1024*1024, 10*1024*1024]), # 1M, 2M, 10M
+            p.ParamRunner       ('mean_calc', 'nprocs', [2]),
+            p.ParamCmdLineArg   ('producer', 'array_size_per_pe', 1, [1024*1024,]), # 1M, 2M, 10M
             p.ParamCmdLineArg   ('producer', 'num_steps', 2, [10]),
             p.ParamADIOS2XML    ('producer', 'producer', 'engine', [ {"SST": {}} ]),
     ]
 
+    # Summit node layout
+    shared_node_nc = SummitNode()
+    for i in range(32):
+        shared_node_nc.cpu[i] = 'producer:{}'.format(i)
+    for i in range(8):
+        shared_node_nc.cpu[i] = 'mean_calc:{}'.format(i)
+
+
+    # This should be 'obj=machine.VirtualNode()'
+    shared_node_dt = DTH2CPUNode()
+    for i in range(10):
+        shared_node_dt.cpu[i] = 'producer:{}'.format(i)
+    shared_node_dt.cpu[11] = 'mean_calc:0'
+    shared_node_dt.cpu[12] = 'mean_calc:1'
+
+
     # Create a sweep
     # node_layout represents no. of processes per node
-    sweep1 = p.Sweep (node_layout = {'theta': [{'simulation':16}, {'norm_calc': 4}] },  # simulation: 16 ppn, norm_calc: 4 ppn
+    sweep1 = p.Sweep (node_layout = {'summit': [shared_node_nc], 'deepthought2_cpu': [shared_node_dt]},  # simulation: 16 ppn, norm_calc: 4 ppn
                       parameters = sweep1_parameters, rc_dependency=None)
 
     # Create a sweep group from the above sweep. You can place multiple sweeps in the group.
@@ -72,6 +90,7 @@ class ProducerConsumer(Campaign):
                                 launch_mode='default',  # or MPMD
                                 # optional:
                                 # nodes=10,
+                                # run_repetitions=2, <-- repeat each experiment this many times
                                 # component_subdirs = True, <-- codes have their own separate workspace in the experiment directory
                                 # component_inputs = {'simulation': ['some_input_file'], 'norm_calc': [SymLink('some_large_file')] } <-- inputs required by codes
                                 # max_procs = 64 <-- max no. of procs to run concurrently. depends on 'nodes'
