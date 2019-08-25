@@ -40,6 +40,42 @@ class MPIRunner(Runner):
             runner_args += [self.hostfile, str(run.hostfile)]
         return runner_args + [run.exe] + run.args
 
+class DTH2Runner(Runner):
+    def __init__(self, cuda_enabled=0):
+        self.exe = 'mpirun' 
+        self.nprocs_arg = '-np'
+        self.tasks_per_node_arg = '-N'
+        self.rankfile = '--rankfile'
+        self.bindings = '--report-bindings'
+        self.env = '-x'
+        self.cuda_enabled = cuda_enabled
+
+        
+    def wrap(self, run, sched_args):
+        if find_in_path:
+            exe_path = shutil.which(self.exe)
+        else:
+            # for test cases
+            exe_path = self.exe
+        if exe_path is None:
+            raise ValueError('Could not find "%s" in path' % self.exe)
+
+        runner_args = [self.exe, 
+                       '--mca', 'mpi_cuda_support', self.cuda_enabled,
+                       self.nprocs_arg, str(run.nodes),
+                       '--report-bindings']
+
+        #Note: need to add rankfile in Run class
+        if run.rankfile is not None: 
+            runner_args += ['--rankfile', run.rankfile]
+        else:
+            runner_args += [self.tasks_per_node_arg, str(run.tasks_per_node)]
+
+        for k,v in run.env:
+            runner_args += [self.env, str(k), str(v)]
+
+        return runner_args + [run.exe] + run.args
+
 
 class SummitRunner(Runner):
     def __init__(self):
@@ -93,4 +129,6 @@ class SummitRunner(Runner):
 mpiexec = MPIRunner('mpiexec', '-n', hostfile='--hostfile')
 aprun = MPIRunner('aprun', '-n', tasks_per_node_arg='-N', hostfile='-L')
 srun = MPIRunner('srun', '-n', nodes_arg='-N', hostfile='-w')
+mpirunc = DTH2Runner(0)
+mpirung = DTH2Runner(1)
 jsrun = SummitRunner()
