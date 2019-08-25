@@ -75,13 +75,13 @@ class DynamicControls():
                         sys.stdout.flush()
                         continue
 
-                print("Waiting for a message....")
+                #print("Waiting for a message....")
                 sys.stdout.flush()
                 message = self.recv_socket.recv()
                 message = message.decode("utf-8") 
-                print("Received a critical update from monitor : ", message)
+                #print("Received a critical update from monitor : ", message)
                 self.recv_socket.send_string("OK")
-                print("Send ack : OK")
+                #print("Send ack : OK")
                 sys.stdout.flush()
                 message = json.loads(message)
 
@@ -125,7 +125,7 @@ class DynamicControls():
                if pipeline_id not in self.active_pipelines: 
                    return
                restart_steps = int(self.pipeline_restart[pipeline_id])
-               print("Current steps ", r_steps,  " : Terminate after ", restart_steps)
+               #print("Current steps ", r_steps,  " : Terminate after ", restart_steps)
                if r_steps >= restart_steps:
                    print("Stopping the pipeline: ", pipeline_id)
                    self.consumer.set_pipeline_restart(pipeline_id, False)
@@ -162,15 +162,13 @@ class DynamicControls():
                         print("Sender: Signing off...")
                         continue
 
-                #check pending requests :: ...
                 #print("Checking queued requests")
                 with self.msg_cond:
                     while len(self.msg_queue) > 0:
                         msg = self.msg_queue[0]
                         self.msg_queue.remove(msg)
-                        print("Found a critical update or response from monitor in queue : ", msg)
+                        print("Recieved from runtime monitor : ", msg)
                         self._decode_and_inact(msg)
-                        #decode message and take action if required!!!
 
                 with self.pipeline_cond: 
                     for id in self.active_pipelines:    
@@ -181,10 +179,10 @@ class DynamicControls():
                              self.pipeline_sockets[id] = self._open_sender_connections(port) 
                          socket = self.pipeline_sockets[id]
                          request = self._create_request(model, datetime.now() - self.starttime , "req:get_update")
-                         print("Sending request ", request, " to pipeline :", id)
+                         #print("Sending request ", request, " to pipeline :", id)
                          socket.send_string(request)
                          message = socket.recv()
-                         print("Received ack msg : ", message)
+                         #print("Received ack msg : ", message)
                          sys.stdout.flush()
                 time.sleep(2) 
             except Exception as e:
@@ -271,24 +269,13 @@ class DynamicControls():
 
             runs_map[run.name] = run.monitor
 
-
-            '''
-            adios2_str = "../" + run.name + "/" + tau_fname + ".bp"
-            if adios2_str is not "":
-                adios2_str = adios2_str
-                adios2_strs.append(adios2_str)
-                adios2_engs.append(adios2_eng)
-                run_map[pipeline.id][adios2_str] = run.name
-            ''' 
         if not monitor:
            return pipeline              
         
 
-        #look into the run directory for any files on decisions..
         run = rmonitor 
         if run.name == "rmonitor":
             self.run_map[pipeline.id] = run_map[pipeline.id]
-            #run.exe = "python3 " + run.exe
             args=[]
             if run.args is not None:
                 args = run.args
@@ -326,26 +313,12 @@ class DynamicControls():
             else:
                 args.extend(['--hc_lib', str(hclib)])
 
-            #ideally we want to set a default model if user didn't specify one
             index =  DynamicUtil.get_index(args, '--model') 
             if index != -1:
                 args[index+1] = str(workflow_model)
             else:
                 args.extend(['--model', str(workflow_model)])
 
-             #can have an else case where user can specify certain configurations for decision language 
-            '''    
-            args.append('--adios2_streams')
-            args.extend(adios2_strs) 
-            args.append('--adios2_stream_engs')
-            args.extend(adios2_engs)
-            '''
-            #rfile_json = DynamicUtil.generate_rfile(pipeline, tau_fname)
-            #rfile = run.working_dir + "/" + "res_map.js"
-            #with open(rfile, 'w') as fp
-            #    json.dump(rfile_json, fp)
-            #args.append('--rmap_file', rfile)
-            print("New args : ", args)        
             run.args = args
             pipeline.runs[rmon_pos] = run
             self._register_pipeline(pipeline, run, workflow_model, pipeline_dag, workflow_restart_steps, runs_map)

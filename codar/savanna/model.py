@@ -315,10 +315,7 @@ class Run(threading.Thread):
                          self._p.returncode)
         self._save_walltime(self._end_time - self._start_time)
         self._save_returncode(self._p.returncode)
-        if self._deliberatily_killed == False:
-            self._run_callbacks()
-        else:
-            self._run_basic_callbacks()
+        self._run_callbacks()
 
     def _run_callbacks(self):
         _log.debug('%s _run_callbacks', self.log_prefix)
@@ -844,14 +841,17 @@ class Pipeline(object):
         for run_name in runs:
             for run in self._active_runs:
                 if run.name == run_name:
-                    print("Found run ", run.name, " with task", str(run.tasks_per_node) + "\n", flush = True)
-                    print("Killing the run" + run.name + "\n", flush = True ) 	 
+                    str = "Kill requested for pipeline " +  self.id + "'s run : " + run.name
+                    _log.warn(str)
+                    #print("Found run ", run.name, " with task", str(run.tasks_per_node), flush = True)
+                    print("Killing the run" + run.name, flush = True ) 	 
                     run._deliberatily_killed = True
                     run.kill()
+                    run._kill_thread.join() 
 
     def stop_all(self):
         for run in self._active_runs:
-             print("Found run ", run.name, " with task", str(run.tasks_per_node) + "\n", flush = True)
+             #print("Found run ", run.name, " with task", str(run.tasks_per_node) + "\n", flush = True)
              print("Killing the run" + run.name + "\n", flush = True ) 	 
              run._deliberatily_killed = False 
              run.kill()
@@ -926,7 +926,7 @@ class Pipeline(object):
         if run._deliberatily_killed == True:
             _log.warn('%s run %s was killed intentionally', 
                        self.log_prefix, run.name)
-            run._deliberatily_killed = False
+            #run._deliberatily_killed = True
         else: 
             _log.warn('%s run %s was not killed intentionally',
                        self.log_prefix, run.name)
@@ -943,7 +943,7 @@ class Pipeline(object):
             elif not self._active_runs:
                 self.run_post_process_script()
                 run_done_callbacks = True
-            elif self.kill_on_partial_failure and not run.succeeded:
+            elif run._deliberatily_killed == False and self.kill_on_partial_failure and not run.succeeded:
                 _log.warn('%s run %s failed, killing remaining',
                           self.log_prefix, run.name)
                 # if configured, kill all runs in the pipeline if one of
@@ -952,6 +952,7 @@ class Pipeline(object):
                 for run2 in self._active_runs:
                     run2.kill()
 
+        run._deliberatily_killed = False 
         # Note: must be done without lock, since callbacks may call
         # get_state or other methods that acquire lock.
         if restart == True:

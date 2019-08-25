@@ -112,11 +112,10 @@ class PipelineRunner(object):
             self.job_list_cv.notify()
 
     def stop_pipeline_runs(self, pipeline_id, run_names):
-        _log.warn("killing all pipelines and exiting consumer")
         with self.pipelines_lock:
             for pipeline in list(self._running_pipelines):
                 if pipeline.id == pipeline_id:
-                    pipeline.stop_runs(runs)
+                    pipeline.stop_runs(run_names)
 
     def stop_pipeline_all(self, pipeline_id):
         str1 = "Stopping all runs of pipeline " + pipeline_id
