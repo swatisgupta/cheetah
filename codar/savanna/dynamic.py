@@ -126,7 +126,7 @@ class DynamicControls():
                    return
                restart_steps = int(self.pipeline_restart[pipeline_id])
                #print("Current steps ", r_steps,  " : Terminate after ", restart_steps)
-               if r_steps >= restart_steps:
+               if r_steps != -1 && r_steps >= restart_steps:
                    print("Stopping the pipeline: ", pipeline_id)
                    self.consumer.set_pipeline_restart(pipeline_id, False)
                    self.consumer.stop_pipeline_all(pipeline_id)
@@ -230,12 +230,12 @@ class DynamicControls():
         workflow_dagfile = os.environ.get("SAVANNA_WORKFLOW_FILE", "")
         workflow_model = os.environ.get("SAVANNA_MONITOR_MODEL", "outsetps")
         workflow_restart = int(os.environ.get("SAVANNA_RESTART_PIPELINE", 0))
-        workflow_restart_steps = int(os.environ.get("SAVANNA_RESTART_STEPS", 0))
-        pipeline_dag = DynamicUtil.generate_dag(workflow_dagfile, pipeline.working_dir)
-        
+        workflow_restart_steps = -1
         if workflow_restart != 0:
             pipeline.restart = True
-
+            workflow_restart_steps = int(os.environ.get("SAVANNA_RESTART_STEPS", 0))
+        pipeline_dag = DynamicUtil.generate_dag(workflow_dagfile, pipeline.working_dir)
+        
         i = -1
         runs_map = {}
         for run in pipeline.runs:
