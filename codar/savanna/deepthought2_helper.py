@@ -62,5 +62,7 @@ def _create_rankfile_node_config(rankfile_path, nprocs, num_nodes_reqd,
                 break
         lines += "\n"
 
+    print("rankfile ::: ", lines)
+
     with open(rankfile_path, 'w') as f:
         f.write(lines)

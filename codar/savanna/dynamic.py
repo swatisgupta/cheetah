@@ -126,7 +126,7 @@ class DynamicControls():
                    return
                restart_steps = int(self.pipeline_restart[pipeline_id])
                #print("Current steps ", r_steps,  " : Terminate after ", restart_steps)
-               if r_steps != -1 && r_steps >= restart_steps:
+               if r_steps != -1 and r_steps >= restart_steps:
                    print("Stopping the pipeline: ", pipeline_id)
                    self.consumer.set_pipeline_restart(pipeline_id, False)
                    self.consumer.stop_pipeline_all(pipeline_id)
@@ -143,6 +143,38 @@ class DynamicControls():
                                runs_names.append(run)
                    if len(runs_names) > 0:
                        self.consumer.stop_pipeline_runs(pipeline_id, runs_names) 
+        if model == "outsteps1":
+           r_steps = 0
+           n_map = {}
+           for st in state:  
+               for node in st.keys():
+                   n_map = st[node]
+                   break
+               break
+           with self.pipeline_cond:
+               pipeline_id = self.pipelines_oport[port] 
+
+               if pipeline_id not in self.active_pipelines: 
+                   return
+               runs_names_inc = []
+               runs_inc_params = {}
+               runs_dec_params = {}
+               runs_names_dec = []
+               run_map = self.pipeline_runs[pipeline_id] 
+               for run in run_map.keys():
+                   r_params = run_map[run]
+                   #print("Parameters for ", run, "are ", r_params) 
+                   if r_params: 
+                       expected_time = 2
+                       if n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] >= 2 * expected_time:
+                           print("Adding run ",run , " to inc set") 
+                           runs_names_inc.append(run)
+                           runs_inc_params[run] = {'nprocs':'2'}
+                       elif n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] < 0.5 * expected_time:
+                           print("Adding run ", run , " to dec set") 
+                           runs_names_dec.append(run)
+                           runs_dec_params[run] = {'nprocs':'2'}
+                  
                            
         if dereg == True:
             self._deregister_pipeline(pipeline_id)
@@ -228,10 +260,11 @@ class DynamicControls():
         adios2_eng = os.environ.get("TAU_ADIOS2_ENGINE", "BPFile")
         '''
         workflow_dagfile = os.environ.get("SAVANNA_WORKFLOW_FILE", "")
-        workflow_model = os.environ.get("SAVANNA_MONITOR_MODEL", "outsetps")
+        workflow_model = os.environ.get("SAVANNA_MONITOR_MODEL", "outsetps2")
         workflow_restart = int(os.environ.get("SAVANNA_RESTART_PIPELINE", 0))
         workflow_restart_steps = -1
         if workflow_restart != 0:
+            print("Setting restart")
             pipeline.restart = True
             workflow_restart_steps = int(os.environ.get("SAVANNA_RESTART_STEPS", 0))
         pipeline_dag = DynamicUtil.generate_dag(workflow_dagfile, pipeline.working_dir)
@@ -318,7 +351,7 @@ class DynamicControls():
                 args[index+1] = str(workflow_model)
             else:
                 args.extend(['--model', str(workflow_model)])
-
+            print("Model set:", workflow_model)
             run.args = args
             pipeline.runs[rmon_pos] = run
             self._register_pipeline(pipeline, run, workflow_model, pipeline_dag, workflow_restart_steps, runs_map)

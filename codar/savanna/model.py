@@ -22,6 +22,7 @@ import logging
 from queue import Queue
 import pdb
 import copy
+import json
 
 from codar.savanna import status, machines, summit_helper, deepthought2_helper
 from codar.savanna.exc import SavannaException
@@ -270,7 +271,8 @@ class Run(threading.Thread):
             self.erf_file = self.working_dir + "/" + self.name + ".erf_input"
             summit_helper.create_erf_file(self)
 
-        if 'deepthought2' in self.machine.name.lower():
+        if 'deepthought2_cpu' in self.machine.name.lower():
+            print("creating rankfile")
             if self.node_config is not None:
                 self.dth_rankfile = self.working_dir + '/' + self.name + \
                                     ".rankfile"
@@ -649,9 +651,11 @@ class Pipeline(object):
             # Note that the NodeConfig/VirtualNode objects have not been
             # created at this point, so use the following to check the node
             # layout type
-            if self.node_layout[0]['__info_type__'] == 'NodeConfig':
-                self._parse_node_layouts()
-
+            try:
+                if self.node_layout[0]['__info_type__'] == 'NodeConfig':
+                    self._parse_node_layouts()
+            except Exception as e:
+                print("Caught an exception..", e)
             # Next start pipeline runs in separate thread and return
             # immediately, so we can inject a wait time between starting runs.
             self._pipe_thread = threading.Thread(target=self._start)
@@ -876,6 +880,36 @@ class Pipeline(object):
                     run.kill()
                     run._kill_thread.join() 
 
+    def stop_run_get_cpus(self, run_name):
+         cpus = []
+         for run in self._active_runs:
+              if run.name == run_name:
+                    str = "Kill requested for pipeline " +  self.id + "'s run : " + run.name
+                    _log.warn(str)
+                    #print("Found run ", run.name, " with task", str(run.tasks_per_node), flush = True)
+                    print("Killing the run" + run.name, flush = True ) 	 
+                    run._deliberatily_killed = True
+                    run.kill()
+                    run._kill_thread.join()
+                    if run.node_config is not None:
+                        for i in range(run.node_config.num_ranks_per_node):
+                            cpus.append(run.node_config.cpu[i]) 
+         return cpus  
+    
+    def get_active_runs:
+         run_names = []
+         total_per_node = 0
+         cpus = []
+         for run in self._active_runs:
+              run_names.append(run.name)
+              if run.node_config is None:
+                  total_per_node += run.ranks_per_node
+              else:
+                  total_per_node += run.node_config.num_ranks_per_node
+                  for i in range(run.node_config.num_ranks_per_node):
+                      cpus.append(run.node_config.cpu[i]) 
+         return run_names, total_per_node, cpus 
+
     def stop_all(self):
         for run in self._active_runs:
              #print("Found run ", run.name, " with task", str(run.tasks_per_node) + "\n", flush = True)
@@ -888,7 +922,7 @@ class Pipeline(object):
         for run_name in runs:
             params = run_params[run_name]
             new_args = params["args"]
-            mprocs = int(params["mprocs"])
+            mprocs = int(params["nprocs"])
             command = params["command"]
             self._pipe_thread.join()
             new_procs = 0
@@ -904,11 +938,15 @@ class Pipeline(object):
                      found = 1
                      break  
 
+            t_per_n = 0 
+
             if found == 1: #run.tasks_per_node >= run.nprocs + 1:
                 if command == "add_procs":
-                    new_procs = mprocs + run.nprocs
+                    new_procs = mprocs * run.nodes  + run.nprocs
+                    t_per_n = new_run.tasks_per_node + mprocs
                 elif command == "term_procs":
-                    new_procs = run.nprocs - mprocs 
+                    new_procs = run.nprocs - mprocs * run.nodes 
+                    t_per_n = new_run.tasks_per_node - mprocs
 
                 new_run = Run(run.name, run.exe, ast.literal_eval(new_args),
                     run.env, run.working_dir,
@@ -926,7 +964,7 @@ class Pipeline(object):
                     new_run.add_basic_callback(self.run_finished)
                     new_run.add_success_callback(self.add_rprocessid)
                     self.runs.remove(run)	
-                    new_run.tasks_per_node = new_procs
+                    new_run.tasks_per_node = t_per_n 
                     new_run.nodes = int(math.ceil(new_run.nprocs / new_run.tasks_per_node))
                     print("Now starting a new job...\n", flush = True ) 	 
                     self._active_runs.add(new_run)
@@ -1088,8 +1126,11 @@ class Pipeline(object):
         # Return if you are using VirtualNode for node layout, as the
         # parsing is done differently for VirtualNode
         # At this point, the node layout is not an object of VirtualNode
-        if self.node_layout[0]['__info_type__'] == 'NodeConfig':
-            return
+        try:
+            if self.node_layout[0]['__info_type__'] == 'NodeConfig':
+                return
+        except Exception as e:
+            print("Caught an exception ", e)
 
         if self.node_layout is None:
             run_names = [run.name for run in self.runs]
@@ -1101,7 +1142,7 @@ class Pipeline(object):
             run_node = node_layout.get_node_containing_code(run.name)
 
             # node sharing is not yet supported
-            assert len(run_node) == 1
+            #assert len(run_node) == 1
 
             run.tasks_per_node = run_node[run.name]
             if run.tasks_per_node > run.nprocs:
