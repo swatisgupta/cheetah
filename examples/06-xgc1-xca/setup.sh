@@ -1,25 +1,27 @@
-#!/bin/tcsh
+#!/bin/bash
 
-module unload petsc
-module unload hdf5
-module unload fftw
-module unload hypre
-module unload netlib-lapack
-module unload cuda
-module unload python
-module unload gcc
+#export TAU_METRICS "TIME,PAPI_NATIVE_PM_LD_L3MISS_PEND_CYC,PAPI_NATIVE_PM_RUN_CYC,PAPI_NATIVE_PM_RUN_INST_CMPL,PAPI_NATIVE_PM_DATA_FROM_L3MISS,PAPI_NATIVE_PM_INST_FROM_L3MISS"
 
-module load gcc/6.1.0
-module load cuda/9.1.85
-module load lapack/3.6.1
-module load hypre/2.11.2/gnu/4.9.3/openmpi/1.8.6/nothreads
-module load fftw/3.3.8/gnu/6.1.0/openmpi/1.10.2/avx/shared
-module load hdf5/gnu/6.1.0/openmpi/1.10.2/shared/1.10.0
-setenv LD_LIBRARY_PATH "/cell_root/software/hdf/1.10.0/gcc/6.1.0/openmpi/1.10.2/shared/sys/lib":${LD_LIBRARY_PATH}
+#export TAU_PLUGINS libTAU-adios2-trace-plugin.so
+#export TAU_PLUGINS_PATH /lustre/ssinghal/tau2-install1/x86_64/lib/shared-papi-mpi-pthread-adios2
+#export TAU_ADIOS2_PERIODIC 1
+#export TAU_ADIOS2_PERIOD 5000000
+#export TAU_ADIOS2_ONE_FILE 0
+#export TAU_ADIOS2_ENGINE SST
+#export TAU_ADIOS2_FILENAME 'tau-adios2-metrics'
 
-setenv SAVANNA_WORKFLOW_FILE "workflow_dag.txt"
-setenv SAVANNA_MONITOR_MODEL "outsteps2"
-setenv SAVANNA_RESTART_PIPELINE 0
-setenv SAVANNA_RESTART_STEPS 100 
+#export TAU_THROTTLE_NUMCALLS 50
+#export TAU_THROTTLE_PERCALL 500
+#export TAU_TRACK_MEMORY_FOOTPRINT 1
+#export TAU_PAPI_MULTIPLEXING 1
+#export TAU_PROFILE 0
+#export TAU_TRACE 1
+#export SstVerbose 1
+export OMP_NUM_THREADS=1
+
+export SAVANNA_WORKFLOW_FILE="workflow_dag.txt"
+export SAVANNA_MONITOR_MODEL="outsteps2"
+export SAVANNA_RESTART_PIPELINE=1
+export SAVANNA_RESTART_STEPS=200 
 
 
