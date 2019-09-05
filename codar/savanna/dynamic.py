@@ -36,6 +36,7 @@ class DynamicControls():
         self.recv_socket = None
         self.pipelines_oport = {}
         self.pipelines = {}
+        self.machine = ""
         self.monitors = {}
         self.active_pipelines = []
         self.pipeline_sockets = {}
@@ -44,6 +45,7 @@ class DynamicControls():
         self.pipeline_restart = {}
         self.pipeline_runs = {} 
         self.pipeline_dag = {}
+        self.pipeline_priority = {}
         self.consumer = consumer
         self.run_map = {}
 
@@ -101,7 +103,6 @@ class DynamicControls():
         print("Opened socket : ", socket_str)
         return socket
 
-
     def _decode_and_inact(self, message):
         port = message["socket"]
         model = message["model"]
@@ -132,7 +133,7 @@ class DynamicControls():
                    self.consumer.stop_pipeline_all(pipeline_id)
                    dereg = True
                else: 
-                   runs_names = []
+                   run_names = []
                    run_map = self.pipeline_runs[pipeline_id] 
                    for run in run_map.keys():
                        r_params = run_map[run]
@@ -140,9 +141,9 @@ class DynamicControls():
                        if r_params: 
                            run_cond = int(r_params['model_params'][2])
                            if n_map['STEPS'][run] >= run_cond:
-                               runs_names.append(run)
-                   if len(runs_names) > 0:
-                       self.consumer.stop_pipeline_runs(pipeline_id, runs_names) 
+                               run_names.append(run)
+                   if len(run_names) > 0:
+                       self.consumer.stop_pipeline_runs(pipeline_id, run_names) 
         if model == "outsteps1":
            r_steps = 0
            n_map = {}
@@ -151,34 +152,96 @@ class DynamicControls():
                    n_map = st[node]
                    break
                break
+           new_per_node = 0
+           n_per_node = 0
+           t_per_node = 0
+           m_cpus = []
+           m_gpus = []
+           cpus = []
+           gpus = [] 
            with self.pipeline_cond:
                pipeline_id = self.pipelines_oport[port] 
 
                if pipeline_id not in self.active_pipelines: 
                    return
                runs_names_inc = []
-               runs_inc_params = {}
-               runs_dec_params = {}
+               runs_params = {}
                runs_names_dec = []
                run_map = self.pipeline_runs[pipeline_id] 
                for run in run_map.keys():
                    r_params = run_map[run]
                    #print("Parameters for ", run, "are ", r_params) 
                    if r_params: 
-                       expected_time = 2
-                       if n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] >= 2 * expected_time:
+                       expected_time = int(r_params['model_params'][1])
+                       if n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] >= 2 * expected_steptime:
                            print("Adding run ",run , " to inc set") 
                            runs_names_inc.append(run)
-                           runs_inc_params[run] = {'nprocs':'2'}
-                       elif n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] < 0.5 * expected_time:
+                           runs_params[run] = {'cpus_node':'2', 'command':'add'}
+                           new_per_node += 2
+                       elif n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] < 0.5 * expected_steptime:
                            print("Adding run ", run , " to dec set") 
                            runs_names_dec.append(run)
-                           runs_dec_params[run] = {'nprocs':'2'}
-                  
-                           
+                           runs_params[run] = {'cpus_node':'2', 'command':'del'}
+                           new_per_node -= 2
+               run_names = runs_names_inc
+               run_names.extend(runs_names_dec)    
+               if len(run_names) > 0:
+                   n_per_node, m_cpus, m_gpus = self.consumer.get_active_cres(pipeline_id, run_names, 0) 
+                   t_per_node, u_cpus, u_gpus = self.consumer.get_active_cres(pipeline_id, run_names)
+                   new_per_node += n_per_node
+                   t_cpus = self.get_machine_cpu()
+                   cpus = [i for i in  u_cpus + m_cpus if i not in u_cpus and i not in m_cpus]  
+                   cpus = [i for i in  cpus + t_cpus if i not in cpus and i not in t_cpus]  
+                   cpus.extend(m_cpus)
+                   new_per_node += n_per_node
+                   gpus = m_gpus
+
+               r_names = run_names 
+               while self.machine != 'local' and len(cpus) < new_per_node:
+                   vic_names = self.find_victim(pipeline_id, r_names)
+                   if len(vic_names) == 0:
+                       print('Cannot restart runs with new params')
+                       break 
+                   for vic_name in vic_names:
+                       m_cpus, m_gpus = self.consumer.stop_pipeline_runs(pipeline_id, [vic_name])                                    
+                       cpus.extend(m_cpus) 
+                       gpus.extend(m_gpus)
+                       r_names.append(vic_name)
+                       if len(cpus) >= new_per_node:
+                           break
+               if len(run_names) > 0 and ((self.machine == 'local' and len(cpus) - n_per_node >= new_per_node) or len(cpus) >= new_per_node):
+                   print("Run names  : ", run_names, " CPUS ", len(cpus), " N_PER_NODE ", n_per_node, " REQUIRED ", new_per_node)
+                   self.consumer.stop_pipeline_runs(pipeline_id, run_names)                                    
+                   self.consumer.restart_pipeline_runs(pipeline_id, run_names, runs_params, cpus, gpus)    
+
         if dereg == True:
             self._deregister_pipeline(pipeline_id)
 
+    def find_victim(self, pipeline_id, r_names):
+        priority = self.pipeline_priority[pipeline_id]
+        print("Getting a victim to kill...", priority) 
+        n_p = len(priority.keys())
+        sorted_keys = sorted(priority.keys(), reverse=True) 
+        for p in sorted_keys:
+            runs = priority[p]
+            found = 1
+            for run in  r_names:
+                if run in runs:
+                    found = 0
+                    break
+            if found == 1:
+                return runs
+        return []
+
+    def get_machine_cpu(self):
+        if self.machine == 'local':
+            return range(15)
+        elif self.machine == 'deepthought2_cpu': 
+            return range(20)
+        elif self.machine == 'summit': 
+            return range(44)
+        else:
+            return []
 
     def _sender(self):   
         keep_requesting = True 
@@ -220,7 +283,7 @@ class DynamicControls():
             except Exception as e:
                  print("Sender : Got an exception ", e)  
  
-    def _register_pipeline(self, pipeline, rmonitor, model, dag, restart_steps, run_map):
+    def _register_pipeline(self, pipeline, rmonitor, model, dag, restart_steps, run_map, run_priority):
         with self.pipeline_cond:
             self.pipelines_oport[self.cur_oport] = pipeline.id 
             self.pipelines[pipeline.id] = pipeline
@@ -231,6 +294,7 @@ class DynamicControls():
             self.pipeline_dag[pipeline.id] = dag
             self.pipeline_restart[pipeline.id] = restart_steps 
             self.pipeline_runs[pipeline.id] = run_map 
+            self.pipeline_priority[pipeline.id] = run_priority 
             self.active_pipelines.append(pipeline.id) 
       
     def _deregister_pipeline(self, pipeline_id):
@@ -244,6 +308,7 @@ class DynamicControls():
         rmonitor = None
         rmon_pos = 0
         run_map = {}
+        run_priority = {}
         run_map[pipeline.id] = {}
         tau_fname = "tau_metrics"
         tau_ftype = "trace" 
@@ -272,6 +337,7 @@ class DynamicControls():
         i = -1
         runs_map = {}
         for run in pipeline.runs:
+            self.machine = run.machine
             adios2_str = ""
             i += 1
             if run.name == "rmonitor":
@@ -286,6 +352,7 @@ class DynamicControls():
             eng = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_ENG", "None")
             stream_file = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_STREAM", "None")
             params = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_MPARAMS", "")
+            priority = int(DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_PRIORITY", "1"))
             if workflow_model == "memory":
                 metric = DynamicUtil.get_env(run.env, "TAU_METRICS", "")
                 if 'PAPI' in metrics:
@@ -300,7 +367,14 @@ class DynamicControls():
                 run.monitor['model_params'] = params.split(',')
                 print(params) 
 
+            run.grace_kill = True 
+
             runs_map[run.name] = run.monitor
+
+            if priority not in run_priority.keys():
+                run_priority[priority] = [] 
+
+            run_priority[priority].append(run.name)  
 
         if not monitor:
            return pipeline              
@@ -354,7 +428,7 @@ class DynamicControls():
             print("Model set:", workflow_model)
             run.args = args
             pipeline.runs[rmon_pos] = run
-            self._register_pipeline(pipeline, run, workflow_model, pipeline_dag, workflow_restart_steps, runs_map)
+            self._register_pipeline(pipeline, run, workflow_model, pipeline_dag, workflow_restart_steps, runs_map, run_priority)
         return pipeline
 
     def start(self):

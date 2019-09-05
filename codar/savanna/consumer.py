@@ -109,11 +109,21 @@ class PipelineRunner(object):
         with self.job_list_cv:
             self.job_list_cv.notify()
 
+
+    def get_active_cres(self, pipeline_id, run_names, all=1):
+        with self.pipelines_lock:
+            for pipeline in list(self._running_pipelines):
+                print("Looking pipeline ...", pipeline )
+                if pipeline.id == pipeline_id:
+                    print("Looking for runs ..", run_names)
+                    run_names1, total_per_node, cpus, gpus =  pipeline.get_active_config(run_names, all)
+        return total_per_node, cpus, gpus
+
     def stop_pipeline_runs(self, pipeline_id, run_names):
         with self.pipelines_lock:
             for pipeline in list(self._running_pipelines):
                 if pipeline.id == pipeline_id:
-                    pipeline.stop_runs(run_names)
+                    return pipeline.stop_run_get_cres(run_names)
 
     def stop_pipeline_all(self, pipeline_id):
         str1 = "Stopping all runs of pipeline " + pipeline_id
@@ -134,12 +144,12 @@ class PipelineRunner(object):
                     print("Found match")
                     pipe.set_restart(restart)
 
-    def restart_pipeline_runs(self, pipeline_id, run_names, run_params):
+    def restart_pipeline_runs(self, pipeline_id, run_names, run_params, cpus, gpus):
         _log.warn("killing all pipelines and exiting consumer")
         with self.pipelines_lock:
             for pipe in list(self._running_pipelines):
                 if pipe.id == pipeline_id:
-                    pipe.restart_runs(run_names, run_params)
+                    pipe.restart_runs(run_names, run_params, cpus, gpus)
 
     def kill_all(self):
         """Kill all running processes spawned by this consumer and don't

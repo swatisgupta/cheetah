@@ -85,6 +85,7 @@ class Run(threading.Thread):
         self.nprocs = nprocs
         self.monitor = {}
         self._deliberatily_killed = False
+        self.grace_kill = False
         # res_set, nrs, and rs_per_host represent resource_set definition,
         # total no. of resource sets, and the no. of resource sets per host
         # respectively. Reqd for Summit.
@@ -360,7 +361,10 @@ class Run(threading.Thread):
 
         if self._p is not None:
             _log.warning('%s kill requested', self.log_prefix)
-            self._kill_thread = threading.Thread(target=self._term_kill)
+            if self.grace_kill == True:
+                self._kill_thread = threading.Thread(target=self._grace_kill)
+            else:
+                self._kill_thread = threading.Thread(target=self._term_kill)
             self._kill_thread.start()
 
     def _term_kill(self):
@@ -378,6 +382,17 @@ class Run(threading.Thread):
             # exited and the group no longer exists, which is what should
             # happen in most cases
             pass
+
+    def _grace_kill(self):
+        """Issue signals to entire process group. Signal process to terminate itself
+        through files."""
+        _log.debug('%s _grace_kill', self.log_prefix)
+        kill_file = self.working_dir + "/kill_run"
+        with open(kill_file,"w+") as f:
+            f.write("kill")        
+        self._p.wait()
+        self._pgroup_wait()
+        os.remove(kill_file)
 
     def _pgroup_wait(self):
         """Wait until the process group lead by this run no longer exists.
@@ -892,35 +907,47 @@ class Pipeline(object):
                     run.kill()
                     run._kill_thread.join() 
 
-    def stop_run_get_cpus(self, run_name):
+    def stop_run_get_cres(self, runs):
          cpus = []
-         for run in self._active_runs:
-              if run.name == run_name:
-                    str = "Kill requested for pipeline " +  self.id + "'s run : " + run.name
-                    _log.warn(str)
-                    #print("Found run ", run.name, " with task", str(run.tasks_per_node), flush = True)
-                    print("Killing the run" + run.name, flush = True ) 	 
-                    run._deliberatily_killed = True
-                    run.kill()
-                    run._kill_thread.join()
-                    if run.node_config is not None:
-                        for i in range(run.node_config.num_ranks_per_node):
-                            cpus.append(run.node_config.cpu[i]) 
-         return cpus  
+         gpus = []
+         for run_name in runs:
+             for run in self._active_runs:
+                 if run.name == run_name:
+                     str = "Kill requested for pipeline " +  self.id + "'s run : " + run.name
+                     _log.warn(str)
+                     #print("Found run ", run.name, " with task", str(run.tasks_per_node), flush = True)
+                     print("Killing the run" + run.name, flush = True ) 	 
+                     run._deliberatily_killed = True
+                     run.kill()
+                     run._kill_thread.join()
+                     if run.node_config is not None:
+                         for i in range(run.node_config.num_ranks_per_node):
+                             cpus.extend(run.node_config.cpu[i]) 
+                         for i in range(len(run.node_config.gpu)):
+                             gpus.extend(run.node_config.cpu[i]) 
+         return cpus, gpus  
     
-    def get_active_runs:
-         run_names = []
+    def get_active_config(self, run_names, all=1):
+         run_out_names = []
          total_per_node = 0
          cpus = []
+         gpus = []
          for run in self._active_runs:
-              run_names.append(run.name)
+              if all == 0 and run.name not in run_names:
+                  continue
+
+              run_out_names.append(run.name)
+ 
               if run.node_config is None:
-                  total_per_node += run.ranks_per_node
+                  total_per_node += run.tasks_per_node
               else:
                   total_per_node += run.node_config.num_ranks_per_node
                   for i in range(run.node_config.num_ranks_per_node):
-                      cpus.append(run.node_config.cpu[i]) 
-         return run_names, total_per_node, cpus 
+                      cpus.extend(run.node_config.cpu[i]) 
+                  for i in range(len(run.node_config.gpu)):
+                      gpus.extend(run.node_config.gpu[i]) 
+         return run_out_names, total_per_node, cpus, gpus 
+
 
     def stop_all(self):
         for run in self._active_runs:
@@ -929,13 +956,28 @@ class Pipeline(object):
              run._deliberatily_killed = False 
              run.kill()
 
-    def restart_runs(self, runs, runs_params):
+    
+    def restart_runs(self, runs, runs_params, cpus, gpus):
         print("Inside force restart\n")
         for run_name in runs:
+            new_args = "" 
+            cpu_nodes = 0
+            gpu_nodes = 0
+            command = ""
             params = run_params[run_name]
-            new_args = params["args"]
-            mprocs = int(params["nprocs"])
-            command = params["command"]
+
+            if "args" in params.keys():
+                new_args = params["args"]
+
+            if "cpu_nodes" in params.keys():
+                cpu_nodes = int(params["cpu_nodes"])
+ 
+            if "gpu_nodes" in params.keys():
+                gpu_nodes = int(params["gpu_nodes"])
+
+            if "command" in params.keys():
+                command = int(params["command"])
+
             self._pipe_thread.join()
             new_procs = 0
             run = None
@@ -950,46 +992,72 @@ class Pipeline(object):
                      found = 1
                      break  
 
-            t_per_n = 0 
-
             if found == 1: #run.tasks_per_node >= run.nprocs + 1:
-                if command == "add_procs":
-                    new_procs = mprocs * run.nodes  + run.nprocs
-                    t_per_n = new_run.tasks_per_node + mprocs
-                elif command == "term_procs":
-                    new_procs = run.nprocs - mprocs * run.nodes 
-                    t_per_n = new_run.tasks_per_node - mprocs
+                 depends_on = None  
 
-                new_run = Run(run.name, run.exe, ast.literal_eval(new_args),
-                    run.env, run.working_dir,
-                    run.timeout, new_procs, run.res_set,
-                    run.stdout_path, run.stderr_path,
-                    run.return_path, run.walltime_path, run.log_prefix,
-                    run.sleep_after, run.depends_on_runs, run.hostfile, run.runner_override)
+                 if run.depends_on_runs is not None:
+                    tmp_run = run.depends_on_runs
+                    depends_on = tmp_run.name
 
-                with self._state_lock:
-                    new_run.log_prefix = "%s:%s" % (self.id, new_run.name)                    
-                    new_run.set_runner(run.runner)
-                    self.runs.append(new_run)	
-                    new_run.add_callback(consumer.run_finished)
-                    new_run.add_callback(self.run_finished)
-                    new_run.add_basic_callback(self.run_finished)
-                    new_run.add_success_callback(self.add_rprocessid)
-                    self.runs.remove(run)	
-                    new_run.tasks_per_node = t_per_n 
-                    new_run.nodes = int(math.ceil(new_run.nprocs / new_run.tasks_per_node))
-                    print("Now starting a new job...\n", flush = True ) 	 
-                    self._active_runs.add(new_run)
-                    self.total_procs -= run.nprocs
-                    self.total_procs += new_procs
-                    #create a rankfile or erffile??
-                    new_run.start()
-                    if new_run.sleep_after:
-                        time.sleep(new_run.sleep_after)
+                 if new_args == "":
+                    new_args = run.sched_args 
+
+                 
+                 new_run = Run( run.name, run.exe, run.args, run.sched_args,
+                               run.env, run.working_dir,
+                               run.timeout, run.nprocs, run.res_set,
+                               run.stdout_path, run.stderr_path,
+                               run.return_path, run.walltime_path,
+                               run.log_prefix, run.sleep_after, depends_on, run.hostfile,
+                               run.runner_override )
+
+                 if command == "add":
+                     new_run.tasks_per_node += cpu_nodes
+                     new_run.nprocs = run.nodes * new_run.tasks_per_node
+                 
+                 elif command == "del":
+                     new_run.tasks_per_node -= cpu_nodes
+                     new_run.nprocs = run.nodes * new_run.tasks_per_node
+                 else:
+                     new_run.tasks_per_node = run.tasks_per_node 
+                     new_run.nprocs = run.nprocs
+
+                 cpu_nodes =  new_run.tasks_per_node
+                 gpu_nodes = len(run.node_config.gpu) 
+
+                 if run.node_config is not None:
+                     self.set_dynamic_node_config(new_run, cpu_nodes, cpus, gpu_nodes, gpus)
+
+                 with self._state_lock:
+                     new_run.log_prefix = "%s:%s" % (self.id, new_run.name)                    
+                     new_run.set_runner(run.runner)
+                     self.runs.append(new_run)	
+                     new_run.machine = run.machine
+                     new_run.callbacks = run.callbacks
+                     self.runs.remove(run)	
+                     new_run.nodes = int(math.ceil(new_run.nprocs / new_run.tasks_per_node))
+                     print("Now starting a new job...\n", flush = True ) 	 
+                     self._active_runs.add(new_run)
+                     self.total_procs -= run.nprocs
+                     self.total_procs += new_runs.nprocs
+                     new_run.start()
+                     if new_run.sleep_after:
+                         time.sleep(new_run.sleep_after)
 
             else:
                 print("no of tasks exceed the resources on the node, skipping!", flush=True)
                 return   
+
+    def set_dynamic_node_config(self, new_run, cpu_node, cpus, gpu_node, gpus):
+        new_run.node_config = NodeConfig()
+        new_run.node_config.num_ranks_per_node = new_run.tasks_per_node
+        for i in range(cpu_node):
+            new_run.node_config.cpu.append([])
+            new_run.node_config.cpu[i].append(cpus[i])
+        for i in range(gpu_node):
+            new_run.node_config.gpu.append([])
+            new_run.node_config.gpu[i].append(gpu[i])
+
  
     def run_finished(self, run):
         assert self._running
