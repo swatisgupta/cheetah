@@ -119,11 +119,17 @@ class PipelineRunner(object):
                     run_names1, total_per_node, cpus, gpus =  pipeline.get_active_config(run_names, all)
         return total_per_node, cpus, gpus
 
-    def stop_pipeline_runs(self, pipeline_id, run_names):
+    def get_pipeline_nrestart(self, pipeline_id):
         with self.pipelines_lock:
             for pipeline in list(self._running_pipelines):
                 if pipeline.id == pipeline_id:
-                    return pipeline.stop_run_get_cres(run_names)
+                    return pipeline.get_n_restarts()
+
+    def stop_pipeline_runs(self, pipeline_id, run_names, run_params = None):
+        with self.pipelines_lock:
+            for pipeline in list(self._running_pipelines):
+                if pipeline.id == pipeline_id:
+                    return pipeline.stop_run_get_cres(run_names, run_params = None)
 
     def stop_pipeline_all(self, pipeline_id):
         str1 = "Stopping all runs of pipeline " + pipeline_id

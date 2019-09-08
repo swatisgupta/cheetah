@@ -291,6 +291,8 @@ class Run(threading.Thread):
             args = [self.exe] + self.args
 
         self._start_time = time.time()
+        self._end_time = None
+
         with self._state_lock:
             if self._killed:
                 _log.info('%s not starting, killed before start',
@@ -507,6 +509,7 @@ class Pipeline(object):
         self._force_killed = False
         self._active_runs = set()
         self.restart = False
+        self._num_restart = 0
         self._pipe_thread = None
         self._temp_thread = None
         self._post_thread = None
@@ -718,16 +721,19 @@ class Pipeline(object):
             if rmonitor.sleep_after:
                 time.sleep(rmonitor.sleep_after)
 
+    def get_n_restarts(self):
+        return self._num_restart
 
     def _restart(self):
         """Start all runs in the pipeline, along with threads that monitor
         their progress and signal consumer when finished. Use join_all to
         wait until they are all finished."""
 
+        _log.debug("Pipeline {} restarting runs, iteration number {}".format(self.id, self._num_restart + 1))
         _log.debug("Pipeline {} launching run components".format(self.id))
         runs = []
         self._pipe_thread.join()
-
+        self._num_restart += 1 
         for run in self.runs:
             if run.name == 'rmonitor':
                 runs.append(run)
@@ -907,12 +913,16 @@ class Pipeline(object):
                     run.kill()
                     run._kill_thread.join() 
 
-    def stop_run_get_cres(self, runs):
+    def stop_run_get_cres(self, runs, run_params = None):
          cpus = []
          gpus = []
          for run_name in runs:
              for run in self._active_runs:
                  if run.name == run_name:
+                     r_p = {}
+                     steps = [] 
+                     if run_params is not None and run_name in run_params.keys():
+                         r_p = run_params[run_name]
                      str = "Kill requested for pipeline " +  self.id + "'s run : " + run.name
                      _log.warn(str)
                      #print("Found run ", run.name, " with task", str(run.tasks_per_node), flush = True)
@@ -920,6 +930,17 @@ class Pipeline(object):
                      run._deliberatily_killed = True
                      run.kill()
                      run._kill_thread.join()
+
+                     if 'steps' in r_p.keys():
+                         steps = r_p['steps'] 
+                     if len(steps) != 0:
+                         inputfile = steps[0]  
+                         key = steps[0]  
+                         value = steps[0]
+                         bashCommand = "sed -i 's/" + key + "=*/" 
+                         bashCommand += key + "=" + value + "/g'  " + run.working_dir +"/" + inputfile 
+                         subprocess.run( bashCommand, shell=True, check=True,
+   				 executable='/bin/bash')  
                      if run.node_config is not None:
                          for i in range(run.node_config.num_ranks_per_node):
                              cpus.extend(run.node_config.cpu[i]) 
@@ -932,7 +953,7 @@ class Pipeline(object):
          total_per_node = 0
          cpus = []
          gpus = []
-         for run in self._active_runs:
+         for run in self._active,s:
               if all == 0 and run.name not in run_names:
                   continue
 
