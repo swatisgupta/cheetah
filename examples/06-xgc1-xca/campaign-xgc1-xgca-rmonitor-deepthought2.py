@@ -43,9 +43,9 @@ class XGC1XCA(Campaign):
 
     nprocs_per_node = 4
     nthreads = 10
-    nprocs = 8 
+    nprocs = 192 
     t_particles=250000 #For small scale run
-    t_particles=100000 #For test run
+    #t_particles=100000 #For test run
     #t_particles = 100000 * nprocs * nthreads * 10 * 8 
 
     """ 
@@ -131,7 +131,7 @@ class XGC1XCA(Campaign):
                                 #per_run_timeout=400,    # Timeout for each experiment                                
                                 parameter_groups=[sweep1],   # Sweeps to include in this group
                                 launch_mode='default',  # Launch mode: default, or MPMD if supported
-                                nodes=3,  # No. of nodes for the batch job.
+                                nodes=49,  # No. of nodes for the batch job.
                                 run_repetitions=0,  # No. of times each experiment in the group must be repeated (Total no. of runs here will be 3)
                                 component_subdirs = True, # Codes have their own separate workspace in the experiment directory
                                 component_inputs = {'xgc1': ['XGC1_exec/adios.in','XGC1_exec/mon_in', 'XGC1_exec/petsc.rc',  SymLink('/homes/ssinghal/XGC-Devel-xgc1-xgca-coupling/xgc_build/xgc-es'), SymLink('XGC-1_inputs'), 'XGC1_exec/adioscfg.xml'], 
