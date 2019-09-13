@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<adios-config>
+    <io name="couplingp">
+        <engine type="BPFile">
+            <parameter key="Profile" value="Off"/>
+            <parameter key="node-local" value="On"/>
+        </engine>
+    </io>
+    <io name="couplingt">
+        <engine type="BPFile">
+            <parameter key="Profile" value="Off"/>
+            <parameter key="node-local" value="On"/>
+        </engine>
+    </io>
+</adios-config>

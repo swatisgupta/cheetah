@@ -1,0 +1,10 @@
+--------------------------------------------------------------
+SML_COMM_WORLD COLOR #1 communicator : 1 nodes, 8 MPI tasks
+COMMUNICATOR NODE # [NODE NAME] : (# OF MPI TASKS) TASK # LIST
+SML_COMM_WORLD COLOR #1 NODE 0 [ login4 ] : ( 8 MPI TASKS ) 0-7
+--------------------------------------------------------------
+--------------------------------------------------------------
+SML_COMM COLOR #1 communicator : 1 nodes, 8 MPI tasks
+COMMUNICATOR NODE # [NODE NAME] : (# OF MPI TASKS) (TASK #,COLUMN,ROW) LIST
+SML_COMM COLOR #1 NODE 0 [ login4 ] : ( 8 MPI TASKS ) (0,0,0) (1,1,0) (2,2,0) (3,3,0) (4,0,1) (5,1,1) (6,2,1) (7,3,1)
+--------------------------------------------------------------

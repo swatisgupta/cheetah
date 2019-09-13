@@ -1,0 +1,192 @@
+
+************ PROCESS      0 (     0) ************
+
+$Id: gptl.c,v 1.157 2011-03-28 20:55:18 rosinski Exp $
+GPTL was built with THREADED_OMP
+HAVE_MPI was true
+  HAVE_COMM_F2C was true
+  ENABLE_PMPI was false
+HAVE_PAPI was false
+Underlying timing routine was MPI_Wtime.
+Per-call utr overhead est: 3.8951e-08 sec.
+If overhead stats are printed, roughly half the estimated number is
+embedded in the wallclock stats for each timer.
+Print method was most_frequent.
+If a '%_of' field is present, it is w.r.t. the first timer for thread 0.
+If a 'e6_per_sec' field is present, it is in millions of PAPI counts per sec.
+
+A '*' in column 1 below means the timer had multiple parents, though the
+values printed are for all calls.
+Further down the listing may be more detailed information about multiple
+parents. Look for 'Multiple parent info'
+
+Stats for thread 0:
+                                               On  Called Recurse   Wallclock          max          min     UTR Overhead 
+  "PETSC_INIT"                                  -       1    -       0.001068     0.001068     0.001068         0.000000 
+  "TOTAL"                                       y       0    -       0.000000     0.000000     0.000000         0.000000 
+    "INIT"                                      -       1    -      13.569463    13.569463    13.569463         0.000000 
+      "i:ADIOS_INIT"                            -       1    -       0.006542     0.006542     0.006542         0.000000 
+      "i:ADIOS2_INIT"                           -       1    -       0.001619     0.001619     0.001619         0.000000 
+      "i:SETUP"                                 -       1    -      13.555982    13.555982    13.555982         0.000000 
+        "i:READ_INPUT"                          -       1    -       0.005593     0.005593     0.005593         0.000000 
+        "i:POST_PROCESS_INPUT"                  -       1    -       0.315556     0.315556     0.315556         0.000000 
+        "i:INIT_GRID"                           -       1    -       6.874765     6.874765     6.874765         0.000000 
+        "i:PSN_MEM_ALLOC"                       -       1    -       0.009979     0.009979     0.009979         0.000000 
+        "i:INIT_FF"                             -       1    -       0.375910     0.375910     0.375910         0.000000 
+        "i:DIAG_1D_INIT"                        -       1    -       0.000004     0.000004     0.000004         0.000000 
+        "i:SETUP_GET_VOLUME"                    -       1    -       0.931409     0.931409     0.931409         0.000000 
+          "i:GET_VOLUME_RED"                    -       1    -       0.179128     0.179128     0.179128         0.000000 
+        "i:LOAD"                                -       1    -       0.225541     0.225541     0.225541         0.000000 
+        "i:DUMP_GRID"                           -       1    -       0.029841     0.029841     0.029841         0.000000 
+        "i:SETUP_CONV_GRID_INIT"                -       1    -       2.124835     2.124835     2.124835         0.000000 
+        "i:SETUP_POISSON"                       -       1    -       2.214856     2.214856     2.214856         0.000000 
+        "i:SETUP_POL_DECOMP"                    -       1    -       0.000002     0.000002     0.000002         0.000000 
+        "i:OUTPUT_BFIELD"                       -       1    -       0.001389     0.001389     0.001389         0.000000 
+        "i:DUMP_BFIELD"                         -       1    -       0.007793     0.007793     0.007793         0.000000 
+        "i:CHARGEE_BACKGROUND"                  -       1    -       0.222791     0.222791     0.222791         0.000000 
+          "i:CHARGEI_SEARCH_INDEX"              -       1    -       0.091098     0.091098     0.091098         0.000000 
+            "i:CHARGEI_SRCHLOOP"                -       1    -       0.091090     0.091090     0.091090         0.000000 
+          "i:UPDATE_ION_WEIGHT"                 -       1    -       0.026688     0.026688     0.026688         0.000000 
+            "i:UPD_ION_WT_LOOP"                 -       1    -       0.026681     0.026681     0.026681         0.000000 
+          "i:CHARGEI_SCATTER"                   -       1    -       0.050838     0.050838     0.050838         0.000000 
+            "i:CHARGEI_SCATTER_ALLOC"           -       1    -       0.000001     0.000001     0.000001         0.000000 
+            "i:CHARGEI_SCATTER_PARALLEL"        -       1    -       0.047786     0.047786     0.047786         0.000000 
+              "i:CHARGEI_SCATTER_LOOP1"         -       1    -       0.044375     0.044375     0.044375         0.000000 
+            "i:CHARGEI_SCATTER_LOOP2"           -       1    -       0.001041     0.001041     0.001041         0.000000 
+          "i:CHARGEI_GYRO_AVG"                  -       1    -       0.051868     0.051868     0.051868         0.000000 
+            "i:CHARGEI_GA_RED"                  -       1    -       0.004639     0.004639     0.004639         0.000000 
+            "i:CHARGEI_GA_MAT"                  -       1    -       0.010892     0.010892     0.010892         0.000000 
+            "i:CHARGEI_GA_SR"                   -       1    -       0.000547     0.000547     0.000547         0.000000 
+            "i:CHARGEI_GA_CNVRT"                -       1    -       0.003362     0.003362     0.003362         0.000000 
+            "i:CHARGEI_GA_SR_RED"               -       1    -       0.028605     0.028605     0.028605         0.000000 
+            "i:CHARGEI_GA_RED_BCAST"            -       1    -       0.000291     0.000291     0.000291         0.000000 
+    "i:sync1_t_prf"                             -       1    -       0.000001     0.000001     0.000001         0.000000 
+    "i:t_prf"                                   -       1    -       0.004975     0.004975     0.004975         0.000000 
+    "i:sync2_t_prf"                             -       1    -       0.000002     0.000002     0.000002         0.000000 
+    "FIRST"                                     -       1    -       0.308056     0.308056     0.308056         0.000000 
+      "SET_WEIGHTS_F"                           -       1    -       0.144242     0.144242     0.144242         0.000000 
+        "swf:LOCAL_WTS_EVAL_ION"                -       1    -       0.086723     0.086723     0.086723         0.000000 
+        "swf:GLOBAL_WT_CALC_SUM_ION"            -       1    -       0.055340     0.055340     0.055340         0.000000 
+        "swf:SET_WTS_PART_OUTPUT"               -       1    -       0.000029     0.000029     0.000029         0.000000 
+      "SHIFT_I_F"                               -       1    -       0.163811     0.163811     0.163811         0.000000 
+        "sif:SHIFT_IE"                          -       1    -       0.163809     0.163809     0.163809         0.000000 
+          "sif:SHIFT_IE_INIT"                   -       1    -       0.159153     0.159153     0.159153         0.000000 
+            "sif:SHIFT_IE_LOOP1"                -       1    -       0.090561     0.090561     0.090561         0.000000 
+            "sif:SHIFT_IE_LOOP2"                -       1    -       0.001181     0.001181     0.001181         0.000000 
+            "sif:SHIFT_IE_RED"                  -       1    -       0.064225     0.064225     0.064225         0.000000 
+            "sif:SHIFT_IE_SR0"                  -       1    -       0.000133     0.000133     0.000133         0.000000 
+          "sif:SHIFT_IE_SR1"                    -       1    -       0.000002     0.000002     0.000002         0.000000 
+          "sif:SHIFT_IE_REARR"                  -       1    -       0.001247     0.001247     0.001247         0.000000 
+          "sif:SHIFT_IE_SR2"                    -       1    -       0.003392     0.003392     0.003392         0.000000 
+    "f:sync1_t_prf"                             -       1    -       0.000587     0.000587     0.000587         0.000000 
+    "f:t_prf"                                   -       1    -       0.005579     0.005579     0.005579         0.000000 
+    "f:sync2_t_prf"                             -       1    -       0.000002     0.000002     0.000002         0.000000 
+    "MAIN_LOOP"                                 -       5    -      11.793844     2.720120     2.193818         0.000000 
+      "MAIN_LOOP_RED"                           -       5    -       0.000141     0.000073     0.000014         0.000000 
+      "IPC_LOOP"                                -      10    -      11.765464     1.425450     1.079421         0.000001 
+        "CHARGEI"                               -      10    -       0.959846     0.191267     0.064318         0.000001 
+          "CHARGEI_SEARCH_INDEX"                -      10    -       0.345942     0.079806     0.020524         0.000001 
+            "CHARGEI_SRCHLOOP"                  -      10    -       0.345884     0.079796     0.020519         0.000001 
+          "UPDATE_ION_WEIGHT"                   -      10    -       0.145704     0.035189     0.007959         0.000001 
+            "UPD_ION_WT_LOOP"                   -      10    -       0.145646     0.035172     0.007955         0.000001 
+          "CHARGEI_SCATTER"                     -      10    -       0.263510     0.056208     0.016930         0.000001 
+            "CHARGEI_SCATTER_ALLOC"             -      10    -       0.000013     0.000002     0.000001         0.000001 
+            "CHARGEI_SCATTER_PARALLEL"          -      10    -       0.236811     0.053132     0.014408         0.000001 
+              "CHARGEI_SCATTER_LOOP1"           -      10    -       0.201316     0.048971     0.011172         0.000001 
+            "CHARGEI_SCATTER_LOOP2"             -      10    -       0.006189     0.000736     0.000519         0.000001 
+          "CHARGEI_GYRO_AVG"                    -      10    -       0.204617     0.022016     0.018680         0.000001 
+            "CHARGEI_GA_RED"                    -      10    -       0.014199     0.002563     0.001156         0.000001 
+            "CHARGEI_GA_MAT"                    -      10    -       0.092185     0.011112     0.008379         0.000001 
+            "CHARGEI_GA_SR"                     -      10    -       0.014291     0.001890     0.000458         0.000001 
+            "CHARGEI_GA_CNVRT"                  -      10    -       0.027800     0.003321     0.002479         0.000001 
+            "CHARGEI_GA_SR_RED"                 -      10    -       0.022981     0.005063     0.000447         0.000001 
+            "CHARGEI_GA_RED_BCAST"              -      10    -       0.001409     0.000160     0.000130         0.000001 
+        "POISSON"                               -      10    -       9.077925     0.991134     0.859188         0.000001 
+          "p:POISSON_00MODE"                    -      10    -       8.373490     0.947670     0.799833         0.000001 
+            "p:POISSON_00MODE_SOLVE"            -     200    -       7.474988     0.051775     0.035162         0.000016 
+*             "p:PETSC_SOLVE"                   -     210    -       6.596326     0.045023     0.029514         0.000016 
+          "p:POISSON_TURB"                      -      10    -       0.426947     0.054239     0.037663         0.000001 
+            "p:POISSON_TURB_SOLVE"              -      10    -       0.375383     0.047837     0.033216         0.000001 
+          "p:POISSON_SR_POT"                    -      10    -       0.276253     0.069263     0.000764         0.000001 
+        "GET_POT_GRAD"                          -      10    -       0.682146     0.084081     0.063214         0.000001 
+          "GET_POT_GRADIENT"                    -      10    -       0.091909     0.011204     0.007857         0.000001 
+          "GET_POT_CNVRT"                       -      20    -       0.038982     0.003499     0.001019         0.000002 
+          "GET_POT_SR"                          -      10    -       0.003068     0.001455     0.000166         0.000001 
+          "GET_POT_MAT_MULT"                    -      10    -       0.311308     0.033999     0.028706         0.000001 
+          "GET_POT_BCAST"                       -      10    -       0.137183     0.021770     0.007037         0.000001 
+          "GET_POT_IDX_REORD"                   -      10    -       0.080625     0.011090     0.005445         0.000001 
+        "ipc1:PUSH"                             -       5    -       0.345819     0.163948     0.036639         0.000000 
+          "ipc1:PUSH_I"                         -       5    -       0.345810     0.163946     0.036637         0.000000 
+            "ipc1:push_sort_particles"          -       1    -       0.028486     0.028486     0.028486         0.000000 
+              "ipc1:sort_particles_gen_perm"    -       1    -       0.017736     0.017736     0.017736         0.000000 
+            "ipc1:PUSH_LOOP"                    -       5    -       0.315508     0.134823     0.036284         0.000000 
+        "DIAGNOSIS"                             -      10    -       0.109111     0.044219     0.000130         0.000001 
+          "DIAG_1D_OUTPUT"                      -       1    -       0.027144     0.027144     0.027144         0.000000 
+          "DIAG_3D"                             -       1    -       0.016931     0.016931     0.016931         0.000000 
+        "SHIFT_I"                               -      10    -       0.302103     0.074598     0.019614         0.000001 
+          "MEM_CLEAN_I"                         -      10    -       0.003774     0.001308     0.000130         0.000001 
+          "si:SHIFT_IE"                         -      10    -       0.298268     0.073790     0.019446         0.000001 
+            "si:SHIFT_IE_INIT"                  -      10    -       0.296037     0.072837     0.019331         0.000001 
+              "si:SHIFT_IE_LOOP1"               -      10    -       0.291132     0.071433     0.017879         0.000001 
+              "si:SHIFT_IE_LOOP2"               -      10    -       0.001530     0.000658     0.000018         0.000001 
+              "si:SHIFT_IE_RED"                 -      10    -       0.001582     0.001369     0.000015         0.000001 
+              "si:SHIFT_IE_SR0"                 -      10    -       0.000263     0.000035     0.000018         0.000001 
+            "si:SHIFT_IE_SR1"                   -      10    -       0.000009     0.000002     0.000001         0.000001 
+            "si:SHIFT_IE_REARR"                 -      10    -       0.000723     0.000414     0.000008         0.000001 
+            "si:SHIFT_IE_SR2"                   -      10    -       0.001422     0.000526     0.000056         0.000001 
+        "ipc2:PUSH"                             -       5    -       0.282109     0.120372     0.032017         0.000000 
+          "ipc2:PUSH_I"                         -       5    -       0.282098     0.120366     0.032016         0.000000 
+            "ipc2:push_sort_particles"          -       1    -       0.020066     0.020066     0.020066         0.000000 
+              "ipc2:sort_particles_gen_perm"    -       1    -       0.014631     0.014631     0.014631         0.000000 
+            "ipc2:PUSH_LOOP"                    -       5    -       0.261961     0.100268     0.032009         0.000000 
+        "diag_3d_additional"                    -       1    -       0.006160     0.006160     0.006160         0.000000 
+      "COLLISION"                               -       5    -       0.000001     0.000000     0.000000         0.000000 
+      "RESTART_WRITE"                           -       1    -       0.028071     0.028071     0.028071         0.000000 
+        "MEM_CLEAN_RSTRT"                       -       1    -       0.020150     0.020150     0.020150         0.000000 
+          "SHIFT_IE"                            -       1    -       0.020035     0.020035     0.020035         0.000000 
+            "SHIFT_IE_INIT"                     -       1    -       0.020029     0.020029     0.020029         0.000000 
+              "SHIFT_IE_LOOP1"                  -       1    -       0.017192     0.017192     0.017192         0.000000 
+              "SHIFT_IE_LOOP2"                  -       1    -       0.000000     0.000000     0.000000         0.000000 
+              "SHIFT_IE_RED"                    -       1    -       0.002818     0.002818     0.002818         0.000000 
+              "SHIFT_IE_SR0"                    -       1    -       0.000000     0.000000     0.000000         0.000000 
+            "SHIFT_IE_SR1"                      -       1    -       0.000000     0.000000     0.000000         0.000000 
+            "SHIFT_IE_REARR"                    -       1    -       0.000000     0.000000     0.000000         0.000000 
+            "SHIFT_IE_SR2"                      -       1    -       0.000000     0.000000     0.000000         0.000000 
+    "sync1_t_prf"                               -       5    -       0.000120     0.000062     0.000001         0.000000 
+    "t_prf"                                     y       4    -       0.020688     0.005857     0.004669         0.000000 
+    "sync2_t_prf"                               -       4    -       0.000008     0.000003     0.000002         0.000000 
+
+Overhead sum =  7.59e-05 wallclock seconds
+Total calls  = 974
+
+Multiple parent info for thread 0:
+Columns are count and name for the listed child
+Rows are each parent, with their common child being the last entry, which is indented.
+Count next to each parent is the number of times it called the child.
+Count next to child is total number of times it was called by the listed parents.
+
+     200 p:POISSON_00MODE_SOLVE          
+      10 p:POISSON_TURB_SOLVE            
+     210   p:PETSC_SOLVE                   
+
+
+thread 0 had some hash collisions:
+hashtable[0][10] had 2 entries: i:CHARGEI_SCATTER_PARALLEL i:CHARGEI_GA_RED
+hashtable[0][188] had 2 entries: i:SETUP ipc1:PUSH_LOOP
+hashtable[0][261] had 2 entries: CHARGEI_SRCHLOOP CHARGEI_SCATTER_PARALLEL
+hashtable[0][1156] had 2 entries: ipc1:PUSH_I ipc2:push_sort_particles
+hashtable[0][1807] had 2 entries: i:DIAG_1D_INIT SHIFT_IE_LOOP2
+Total collisions thread 0 = 5
+Entry information:
+num_zero = 1920 num_one = 123 num_two = 5 num_more = 0
+Most = 2
+
+Thread 0 total memory usage = 72.128 KB
+  Hashmem                   = 32.768 KB
+  Regionmem                 = 37.24 KB (papimem portion = 0 KB)
+  Parent/child arrays       = 2.12 KB
+
+Total memory usage all threads = 72.128 KB
+
+Thread mapping:
+threadid_omp[0] = 0

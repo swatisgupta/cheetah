@@ -129,7 +129,8 @@ class PipelineRunner(object):
         with self.pipelines_lock:
             for pipeline in list(self._running_pipelines):
                 if pipeline.id == pipeline_id:
-                    return pipeline.stop_run_get_cres(run_names, run_params = None)
+                    
+                    return pipeline.stop_run_get_cres(run_names, run_params)
 
     def stop_pipeline_all(self, pipeline_id):
         str1 = "Stopping all runs of pipeline " + pipeline_id

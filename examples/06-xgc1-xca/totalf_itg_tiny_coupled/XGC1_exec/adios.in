@@ -1,0 +1,3 @@
+&adios_param
+staging_read_method_name='MPI'
+/

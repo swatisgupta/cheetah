@@ -1,0 +1,184 @@
+&sml_param
+sml_marker_temp_factor=1.5D0
+sml_machine=0             ! 0 circular, 1:D3D, 
+sml_node_file='cyclone4mm_64.eqd.node'
+sml_ele_file='cyclone4mm_64.eqd.ele'
+sml_f0_grid=.false.
+sml_pol_decomp=.true.
+sml_f0_grid_alpha=0.00D0
+!sml_f0_alpha1=0.000D0
+!sml_f0_alpha2=0.0000D0
+sml_bfollow=1
+sml_nhybrid=1
+sml_co_cur_bt=.true.
+sml_special=0             ! 0: normal simulation, 1: single particle simulation
+sml_dt=0.0025D0       ! delta-t for one time step - unit of toroidal transit time. 
+sml_mstep=10         ! total time step
+sml_deltaf=.false.              ! delta-f simulation switch - incomplete
+sml_electron_on=.false.
+sml_nphi_total=2         ! number of poloidal planes
+sml_grid_nrho=2
+!sml_canonical_maxwell=0   ! canonical maxwellian initial loading switch - incomplete
+sml_bounce=2              ! Particle motion boundary condition 
+                          ! 1 for edge simulation (including open field line region)
+                          ! 2 for core simulation (excluding open field line region)
+!sml_limiter=0             ! Limiter on/off
+sml_fem_matrix=1
+sml_inpsi=0.00             ! inner boundary of simulation - unit of eq_x_psi
+sml_outpsi=0.975            ! outter boundary of simulation - unit of eq_x_psi
+sml_dwdt_exb_only=.false.
+!sml_push_mode=2
+!sml_pc_order=4
+sml_restart_write_period=5
+sml_restart=.f.
+sml_deltaf_f0_mode=-2
+sml_guess_table_size=1000
+sml_00_efield=.true.
+sml_00_npsi=150
+sml_turb_efield=.true.
+sml_input_file_dir='../XGC-1_inputs'
+sml_bd_ext_delta1=-0.01
+sml_bd_ext_delta3=0.01
+sml_bd_ext_delta1H=-0.01
+!sml_bd_ext_delta3H=0.01
+sml_bd_ext_delta2=-0.02
+sml_bd_ext_delta4=0.02
+sml_bd_ext_delta2H=-0.02
+!sml_bd_ext_delta4H=0.01
+!sml_bd_ext_delta1=-0.01
+!sml_bd_ext_delta3=0.005
+!sml_bd_ext_delta1H=-0.01
+!sml_bd_ext_delta3H=0.01
+!sml_bd_ext_delta2=-0.01
+!sml_bd_ext_delta4=0.01
+!sml_bd_ext_delta2H=-0.01
+!!sml_bd_ext_delta4H=0.01
+!sml_bounce_zero_weight=1
+sml_weight_max=2D0
+sml_rhomax=1.8D-2
+sml_ncycle_half=10
+sml_f_source_period=1000
+sml_source=.true.
+sml_poisson_solver_type=0
+sml_iter_solver=.true.
+sml_iter_solver_niter=20
+!!!sml_coupling_on=.f.
+!!!sml_mode_select_on=0
+!sml_mode_select_n=0
+!sml_supress_weight_growth=.true.
+!sml_use_simple00=.false.
+sml_sheath_mode=0
+sml_sheath_adjust=.false.
+/
+
+&ptl_param
+ptl_mass_au=2D0             ! 1 for hydrogen, 2 for deutron
+ptl_charge_eu=1D0            ! ion charge
+ptl_num=100000 !250000
+ptl_maxnum=5000000
+/
+
+&eq_param ! Initial equilibrium profile - Tanh profile
+eq_filename='cyclone4mm_64.eqd'
+eq_den_shape=5
+eq_den_v1=4.0D19          ! inside value of density m^-3
+eq_den_v2=0.2D19          ! outside value of density  m^-3
+eq_den_x1=1.05D0          ! pedestal center
+eq_den_x2=0.05D0          ! pedestal width
+eq_den_v3=6.0D19
+eq_den_x3=0D0
+eq_tempi_shape=-1
+eq_tempe_shape=-1
+eq_tempi_file='temperature_hcpl.prf'
+eq_tempe_file='temperature_hcpl.prf'
+eq_tempi_x1=0.97D0
+eq_tempe_x1=0.97D0
+eq_tempi_x2=0.07D0
+eq_tempe_x2=0.07D0
+eq_tempi_v1=1D3      ! ion temperature (inside) - eV
+eq_tempi_v2=1d2     ! ion temperature (outside) - eV
+eq_tempe_v1=1D3
+eq_tempe_v2=1D2
+eq_tempi_v3=5.7D3
+eq_tempi_x3=0D0
+eq_tempe_v3=5.7D3
+eq_tempe_x3=0D0
+/
+
+!&efld_param ! E-field calculation
+!efld_mode=2              ! 0 zero efield, 1 static efield, 2 self-consistent
+!efld_cutoff=1
+!/
+
+&col_param  ! Collision
+col_mode=0  ! 0 : off , 1 monte-carlo (non-conserving) 2: monte-carlo (conserving)
+/
+
+&diag_param ! diagnosis
+diag_1d_on=.true.
+diag_1d_period=50000
+diag_1d_npsi=120
+diag_f0_period=20
+!diag_tavg_on=.true.
+diag_tracer_period=20000
+diag_3d_on=.true.
+!!!diag_3d_period=20
+diag_3d_more=.true.
+!!!diag_turb_on=.t.
+!diag_turb_period=1
+!!!diag_turb_nskip=0
+/
+
+&neu_param            ! neutral collision
+neu_col_mode=0
+/
+
+&src_param
+src_narea=2
+src_period=1000
+src_heat_power1=3.50D7
+src_pin1=0.2
+src_pout1=0.4
+src_decay_width1=0.1
+
+src_pin2=0.6
+src_pout2=0.8
+src_decay_width2=0.1
+src_heat_power2=-3.5D7
+/
+
+&lim_param            ! limiter 
+/
+
+&smooth_param
+smooth_mode_in=0
+smooth_H_mode_in=2
+smooth_H_n_in=1
+smooth_r1_n_in=2
+smooth_r1_d0_in=0.0042
+smooth_r1_type_in=1
+smooth_diag_mode_in=-1
+/
+
+&tbl_param
+/
+
+!&prof_inparam
+!profile_papi_enable=.true.
+!/
+
+&mon_param
+/
+
+&adios_param
+/
+
+&coupling_param
+sml_coupling_on=.true.
+sml_coupling_xgc1_dir='../XGC1_exec'
+sml_coupling_xgca_dir='../XGCa_exec'
+sml_coupling_shared_dir='../coupling'
+/
+
+&ptb_3db_param
+/

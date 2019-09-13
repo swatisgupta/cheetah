@@ -55,9 +55,26 @@ def _create_rankfile_node_config(rankfile_path, nprocs, num_nodes_reqd,
         for j, rank_id in enumerate(rank_map.keys()):
             res_map = rank_map[rank_id]
             lines += "rank {} = +n{} ".format(j +rank_offset, int(next_host) - 1 )
+            map = {}
+            k = 0
             for index, core_id in enumerate(res_map.core_ids):
-                lines += "slot = {}:{}\n".format(int(core_id/10), core_id % 10)
-        
+                if int(core_id/10) not in map.keys():
+                    map[int(core_id/10)] = []
+                    k += 1 
+                map[int(core_id/10)].append(core_id % 10)
+            print("rankfile ", map)
+            lines += "slot = "
+            for key in map.keys():    
+                if len(map[key]) == 1:
+                    lines += "{}:{}".format(key,  map[key][0])
+                elif len(map[key]) > 1:      
+                    lines += "{}:{}-{}".format(key,  map[key][0], map[key][-1])
+                k -= 1
+                if k > 0:
+                    lines += ","
+                else:
+                    lines += "\n"
+
             if j+rank_offset == nprocs-1:
                 break
 

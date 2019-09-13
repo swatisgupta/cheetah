@@ -7,15 +7,15 @@ import threading
 import socket as soc
 import zmq
 import datetime
+import dateutil.parser
 import sys
 import json
-from datetime import datetime
 import time 
 import codar.savanna.producer
 import codar.savanna.consumer
 from codar.savanna.dynamic_util import DynamicUtil
 from queue import Queue 
-
+import math
 
 class DynamicControls():
     
@@ -23,7 +23,7 @@ class DynamicControls():
         self.recv_port = 8080
         self.cur_oport = 8085
         self.cur_lport = 8086
-        self.starttime = datetime.now()
+        self.starttime = datetime.datetime.now()
         self.reciever_thread = None  
         self.decision_thread = None 
         self.recv_cond = threading.Condition()
@@ -48,6 +48,7 @@ class DynamicControls():
         self.pipeline_priority = {}
         self.consumer = consumer
         self.run_map = {}
+        self.timestamp = {}
 
     def _create_request(self, model_name, timestamp, req_type, msg={}):
         timestamp = list(divmod(timestamp.total_seconds(), 60)) 
@@ -129,10 +130,11 @@ class DynamicControls():
                restart_steps = int(self.pipeline_restart[pipeline_id])
                #print("Current steps ", r_steps,  " : Terminate after ", restart_steps)
                if r_steps != -1 and r_steps >= restart_steps:
-                   print("Stopping the pipeline: ", pipeline_id, " Timestamp : ", time.now())
+                   print("Stopping the pipeline: ", pipeline_id, " Timestamp : ", time.time())
+                   DynamicUtil.log_dynamic.info("Total steps completed {} for pipeline {}".format(r_steps, self.id))
                    self.consumer.set_pipeline_restart(pipeline_id, False)
                    self.consumer.stop_pipeline_all(pipeline_id)
-                   print("Done stopping the pipeline: ", pipeline_id, " Timestamp : ", time.now())
+                   print("Done stopping the pipeline: ", pipeline_id, " Timestamp : ", time.time())
                    dereg = True
                else: 
                    run_names = []
@@ -145,20 +147,29 @@ class DynamicControls():
                            run_cond = int(r_params['model_params'][2])
                            input_file = r_params['model_params'][5]
                            key = r_params['model_params'][6]
-                           step_fn = r_params['model_params'][7]
+                           step_fn = r_params['model_params'][7].strip()
                            ch_iter = int(r_params['model_params'][8])
-                           if niter % ch_iter == 0 and n_map['STEPS'][run] >= run_cond:
+                           max_iter = int(r_params['model_params'][9])
+                           last_killed = int(r_params['last_killed'])
+                           if step_fn == 'log2':
+                               run_cond = run_cond - int(math.log2(run_cond))
+                           elif step_fn == 'log':                    
+                               run_cond = run_cond - int(math.log(run_cond))
+                           print("run condition for run ", run, " is ", run_cond, " step function is ", step_fn,  flush = True)   
+                           if niter % ch_iter == 0 and last_killed < niter and n_map['STEPS'][run] >= run_cond and n_map['STEPS'][run] < max_iter:
                                run_names.append(run)
-                               if step_fn == 'log2':
-                                   run_cond = math.log2(run_cond)
-                               elif step_fn == 'log':                    
-                                   run_cond = math.log(run_cond)
+                               DynamicUtil.log_dynamic.info("Total steps completed {}, steps completed by run {} at iteration {} are {} >= {} for pipeline {}".format(r_steps, run, niter, n_map['STEPS'][run], run_cond,  self.id))
                                self.pipeline_runs[pipeline_id][run]['model_params'][2] = run_cond 
+                               self.pipeline_runs[pipeline_id][run]['model_params'][9] = n_map['STEPS'][run]
+                               self.pipeline_runs[pipeline_id][run]['last_killed'] = niter 
                            run_p[run] = {'nstep' : [input_file, key, run_cond]}
                    if len(run_names) > 0:
-                       print("Stopping the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", run_p, "  Timestamp : ", time.now())
+                       print("Stopping the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", run_p, "  Timestamp : ", time.time())
                        self.consumer.stop_pipeline_runs(pipeline_id, run_names, run_p) 
-                       print("Stopped the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", run_p, "  Timestamp : ", time.now())
+                       print("Stopped the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", run_p, "  Timestamp : ", time.time())
+                       #request = self._create_request(model, datetime.now() - self.starttime , "req:change_params", self.pipeline_runs[pipeline_id])
+                       #socket.send_string(request)
+                       #message = socket.recv()
         if model == "outsteps1":
            r_steps = 0
            n_map = {}
@@ -176,47 +187,75 @@ class DynamicControls():
            gpus = [] 
            with self.pipeline_cond:
                pipeline_id = self.pipelines_oport[port] 
-
+               
                if pipeline_id not in self.active_pipelines: 
                    return
+               print("Got a message for ", pipeline_id , flush = True)
+               if self.timestamp[pipeline_id] > dateutil.parser.parse(timestamp): # , '%y-%m-%d %H:%M:%S.%f'):
+                   return
+
                runs_names_inc = []
                runs_params = {}
                runs_names_dec = []
                run_map = self.pipeline_runs[pipeline_id] 
-               dag = self.pipeline_dag[pipeline.id]
+               dag_child = self.pipeline_dag[pipeline_id]["child_dag"]
+               dag_parent = self.pipeline_dag[pipeline_id]["parent_dag"]
                for run in run_map.keys():
                    r_params = run_map[run]
+                   done_run = 0
                    #print("Parameters for ", run, "are ", r_params) 
                    if r_params: 
                        expected_steptime = int(r_params['model_params'][1])
-                       if n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] >= 2 * expected_steptime:
+                       do_change = int(r_params['model_params'][3])
+                       if n_map['N_STEPS'][run] == self.pipeline_runs[pipeline_id][run]['last_killed']: 
+                           continue
+                       for parents in dag_parent[run].keys():
+                            if do_change and n_map['N_STEPS'][run] < n_map['N_STEPS'][parents] - 10:
+                                print("Adding run ",run , " to inc set") 
+                                runs_names_inc.append(run)
+                                runs_params[run] = {'cpus_node':'2', 'command':'add'}
+                                new_per_node += 2
+                                done_run = 1
+                                self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
+                                break
+                       if done_run == 1:
+                           continue
+                       elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] >= 2 * expected_steptime:
                            print("Adding run ",run , " to inc set") 
                            runs_names_inc.append(run)
                            runs_params[run] = {'cpus_node':'2', 'command':'add'}
                            new_per_node += 2
-                       elif n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] < 0.5 * expected_steptime:
+                           self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
+                       elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] < 0.5 * expected_steptime:
                            print("Adding run ", run , " to dec set") 
                            runs_names_dec.append(run)
                            runs_params[run] = {'cpus_node':'2', 'command':'del'}
                            new_per_node -= 2
+                           self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
+                       
                run_names = runs_names_inc
                run_names.extend(runs_names_dec)    
                if len(run_names) > 0:
                    dep_runs = []
                    for run in run_names:
-                       if run in dag.keys():
-                           for dep in dag.keys():
+                       if run in dag_child.keys():
+                           for dep in dag_child[run].keys():
                                if dep not in run_names: 
                                    dep_runs.append(dep)
+                   run_names.extend(dep_runs)
+
                    n_per_node, m_cpus, m_gpus = self.consumer.get_active_cres(pipeline_id, run_names, 0) 
                    t_per_node, u_cpus, u_gpus = self.consumer.get_active_cres(pipeline_id, run_names)
-                   new_per_node += n_per_node
                    t_cpus = self.get_machine_cpu()
-                   cpus = [i for i in  u_cpus + m_cpus if i not in u_cpus and i not in m_cpus]  
-                   cpus = [i for i in  cpus + t_cpus if i not in cpus and i not in t_cpus]  
-                   cpus.extend(m_cpus)
                    new_per_node += n_per_node
+                   if self.machine == 'local':
+                       cpus = range(len(t_cpus) - t_per_node + new_per_node)  
+                   else:
+                       cpus = [i for i in  u_cpus + m_cpus if i not in u_cpus and i not in m_cpus]  
+                       cpus = [i for i in  cpus + t_cpus if i not in cpus and i not in t_cpus]  
+                       cpus.extend(m_cpus)
                    gpus = m_gpus
+                   print("CPUS...", cpus, " Total CPUS..", t_cpus, " NEW_PER_NODE...", new_per_node, flush = True )
 
                r_names = run_names 
                while self.machine != 'local' and len(cpus) < new_per_node:
@@ -225,9 +264,9 @@ class DynamicControls():
                        print('Cannot restart runs with new params')
                        break 
                    for vic_name in vic_names:
-                       print("Stopping the pipeline : ", pipeline_id, " run(victim)  : ", vic_name, "  Timestamp : ", time.now())
+                       print("Stopping the pipeline : ", pipeline_id, " run(victim)  : ", vic_name, "  Timestamp : ", time.time())
                        m_cpus, m_gpus = self.consumer.stop_pipeline_runs(pipeline_id, [vic_name])                                    
-                       print("Stopped the pipeline : ", pipeline_id, " run(victim)  : ", vic_name, "  Timestamp : ", time.now())
+                       print("Stopped the pipeline : ", pipeline_id, " run(victim)  : ", vic_name, "  Timestamp : ", time.time())
 
                        cpus.extend(m_cpus) 
                        gpus.extend(m_gpus)
@@ -237,11 +276,11 @@ class DynamicControls():
                            break
                if len(run_names) > 0 and ((self.machine == 'local' and len(cpus) - n_per_node >= new_per_node) or len(cpus) >= new_per_node):
                    print("Run names  : ", run_names, " CPUS ", len(cpus), " N_PER_NODE ", n_per_node, " REQUIRED ", new_per_node)
-                   print("Stopping and restarting the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", runs_params, "  Timestamp : ", time.now())
+                   print("Stopping and restarting the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", runs_params, "  Timestamp : ", time.time())
                    self.consumer.stop_pipeline_runs(pipeline_id, run_names)                                    
                    self.consumer.restart_pipeline_runs(pipeline_id, run_names, runs_params, cpus, gpus)    
-                   print("Stopped and restarted the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", runs_params, "  Timestamp : ", time.now())
-
+                   print("Stopped and restarted the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", runs_params, "  Timestamp : ", time.time())
+               self.timestamp[pipeline_id] = datetime.datetime.now()
         if dereg == True:
             self._deregister_pipeline(pipeline_id)
         sys.stdout.flush()
@@ -252,24 +291,28 @@ class DynamicControls():
         print("Getting a victim to kill...", priority) 
         n_p = len(priority.keys())
         sorted_keys = sorted(priority.keys(), reverse=True) 
+        no_victim = 0
         for p in sorted_keys:
             runs = priority[p]
-            found = 1
+            found = 1 
             for run in  r_names:
                 if run in runs:
                     found = 0
+                    no_victim = 1
                     break
             if found == 1:
                 return runs
+            if no_victim == 1:
+                break
         return []
 
     def get_machine_cpu(self):
         if self.machine == 'local':
-            return range(15)
+            return list(range(15))
         elif self.machine == 'deepthought2_cpu': 
-            return range(20)
+            return list(range(20))
         elif self.machine == 'summit': 
-            return range(44)
+            return list(range(44))
         else:
             return []
 
@@ -303,7 +346,7 @@ class DynamicControls():
                              port = self.pipeline_socket_port[id] 
                              self.pipeline_sockets[id] = self._open_sender_connections(port) 
                          socket = self.pipeline_sockets[id]
-                         request = self._create_request(model, datetime.now() - self.starttime , "req:get_update")
+                         request = self._create_request(model, datetime.datetime.now() - self.starttime , "req:get_update")
                          #print("Sending request ", request, " to pipeline :", id)
                          socket.send_string(request)
                          message = socket.recv()
@@ -326,10 +369,11 @@ class DynamicControls():
             self.pipeline_runs[pipeline.id] = run_map 
             self.pipeline_priority[pipeline.id] = run_priority 
             self.active_pipelines.append(pipeline.id) 
-      
+            self.timestamp[pipeline.id] = datetime.datetime.now()
+ 
     def _deregister_pipeline(self, pipeline_id):
         with self.pipeline_cond:
-            self.active_pipelines.remove(pipeline.id)
+            self.active_pipelines.remove(pipeline_id)
       
     def process_pipeline(self, pipeline):
         adios2_strs = []
@@ -355,19 +399,19 @@ class DynamicControls():
         adios2_eng = os.environ.get("TAU_ADIOS2_ENGINE", "BPFile")
         '''
         workflow_dagfile = os.environ.get("SAVANNA_WORKFLOW_FILE", "")
-        workflow_model = os.environ.get("SAVANNA_MONITOR_MODEL", "outsetps2")
+        workflow_model = os.environ.get("SAVANNA_MONITOR_MODEL", "outsteps2")
         workflow_restart = int(os.environ.get("SAVANNA_RESTART_PIPELINE", 0))
         workflow_restart_steps = -1
         if workflow_restart != 0:
             print("Setting restart")
             pipeline.restart = True
             workflow_restart_steps = int(os.environ.get("SAVANNA_RESTART_STEPS", 0))
-        pipeline_dag = DynamicUtil.generate_dag(workflow_dagfile, pipeline.working_dir)
-        
+        pipeline_dag1, pipeline_dag2 = DynamicUtil.generate_dag(workflow_dagfile, pipeline.working_dir)
         i = -1
         runs_map = {}
         for run in pipeline.runs:
-            self.machine = run.machine
+            self.machine = run.machine.name
+            print("Machine .... ", self.machine, flush = True )
             adios2_str = ""
             i += 1
             if run.name == "rmonitor":
@@ -376,12 +420,16 @@ class DynamicControls():
                 rmonitor = run
                 continue 
 
-            if run.name not in pipeline_dag.keys():
-                pipeline_dag[run.name]= {}
+            if run.name not in pipeline_dag1.keys():
+                pipeline_dag1[run.name]= {}
+
+            if run.name not in pipeline_dag2.keys():
+                pipeline_dag2[run.name]= {}
 
             eng = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_ENG", "None")
             stream_file = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_STREAM", "None")
             params = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_MPARAMS", "")
+            workflow_model = DynamicUtil.get_env("SAVANNA_MONITOR_MODEL", "outsteps2")
             priority = int(DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_PRIORITY", "1"))
             if workflow_model == "memory":
                 metric = DynamicUtil.get_env(run.env, "TAU_METRICS", "")
@@ -395,6 +443,7 @@ class DynamicControls():
                 run.monitor['stream_eng'] = eng 
                 run.monitor['stream_nm'] = stream_file 
                 run.monitor['model_params'] = params.split(',')
+                run.monitor['last_killed'] = 0
                 print(params) 
 
             run.grace_kill = True 
@@ -458,6 +507,9 @@ class DynamicControls():
             print("Model set:", workflow_model)
             run.args = args
             pipeline.runs[rmon_pos] = run
+            pipeline_dag = {}
+            pipeline_dag["child_dag"] = pipeline_dag1
+            pipeline_dag["parent_dag"] = pipeline_dag2
             self._register_pipeline(pipeline, run, workflow_model, pipeline_dag, workflow_restart_steps, runs_map, run_priority)
         return pipeline
 

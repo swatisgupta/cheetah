@@ -1,7 +1,17 @@
 import time
 import os
+import logging
+
+
+logging.basicConfig(
+    format='%(asctime)s %(levelname)-8s %(message)s',
+    level=logging.INFO,
+    datefmt='%Y-%m-%d %H:%M:%S')
+
 
 class DynamicUtil():
+
+   _log_dynamic = logging.getLogger('codar.savanna.dynamic')
 
    @staticmethod
    def get_env(env, key, default=""):
@@ -58,19 +68,20 @@ class DynamicUtil():
    @staticmethod
    def generate_dag(workflow_dagfile, path):
        pipeline_map = {}
+       pipeline_map_p = {}
        if workflow_dagfile == "":
-           return pipeline_map
+           return pipeline_map, pipeline_map_p
  
        filename = path + "/" + workflow_dagfile 
        if not os.path.exists(filename):
-           return pipeline_map
+           return pipeline_map, pipeline_map_p
     
        with open(filename) as dagfile:
            line = dagfile.readline()
            while line:
                 dependency_list = line.split(":")
-                component = dependency_list[0]
-                depends_on = dependency_list[1]
+                component = dependency_list[0].strip()
+                depends_on = dependency_list[1].strip()
                 dependency_file = dependency_list[2]
                 dependency_params = "" 
                 if len(dependency_list) > 3:
@@ -79,8 +90,55 @@ class DynamicUtil():
                     pipeline_map[depends_on] = {}
                 if component not in pipeline_map[depends_on].keys():
                     pipeline_map[depends_on][component] = {}
+
+                if component not in pipeline_map_p.keys():
+                    pipeline_map_p[component] = {}
+                if depends_on not in pipeline_map_p[component].keys():
+                    pipeline_map_p[component][depends_on] = {}
+ 
                 pipeline_map[depends_on][component][dependency_file] = dependency_params.split()
                 line = dagfile.readline()
 
-       return pipeline_map
+       list1 = []
+       for deps in pipeline_map.keys():
+           if deps not in list1:
+               print("DEPS...", deps)
+               list1.extend(DynamicUtil.acyclic_dependency(deps, pipeline_map))                    
 
+       #list1 = []
+       #for deps in pipeline_map_p.keys():
+       #    if deps is not in list1:
+       #        list1.extend(self._acyclic_dependency(deps, pipeline_map_p))                    
+       return pipeline_map, pipeline_map_p
+
+   @staticmethod
+   def acyclic_dependency(comp, map):
+       list = []
+       if comp not in map.keys():
+           return list
+       for i in map[comp].keys():
+           print("Rec call acyclic_dependency(", i, " , ",  map, ")" ) 
+           list.extend(DynamicUtil.acyclic_dependency(i,map))
+       for i in list:
+           map[comp][i] = {}
+       return list
+
+
+'''
+class TreeNode():
+    def __init(self, name, files):
+        self.Name = name
+        self.files = files
+ 
+class Tree():
+     def __init(self):
+         self.parent = []
+         self.child = []
+
+     def add_parent(self, tree_node):
+         self.parent.append(tree_node)
+ 
+     def add_child(self, tree_node):
+         self.child.append(tree_node)
+'''
+     

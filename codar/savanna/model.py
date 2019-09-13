@@ -24,6 +24,7 @@ import copy
 import pdb
 import copy
 import json
+from codar.savanna.dynamic_util import DynamicUtil
 
 from codar.savanna import status, machines, summit_helper, deepthought2_helper
 from codar.savanna.exc import SavannaException
@@ -305,6 +306,7 @@ class Run(threading.Thread):
             return
         _log.info('%s start pid=%d pgid=%d args=%r',
                   self.log_prefix, self._p.pid, self._pgid, args)
+        DynamicUtil.log_dynamic.info("Starting run {} pid {} args{}".format(self.name, self._p.pid, args))
         try:
             self._p.wait(self.timeout)
         except subprocess.TimeoutExpired:
@@ -331,6 +333,15 @@ class Run(threading.Thread):
         self._save_walltime(self._end_time - self._start_time)
         self._save_returncode(self._p.returncode)
         self._run_callbacks()
+        DynamicUtil.log_dynamic.info("Done run {} pid {} returncode".format(self.name, self._p.pid, self._p.returncode))
+
+
+    def wait_for_kill(self):
+        killed = False
+        if self._kill_thread is not None:
+             self._kill_thread.join()
+             killed = True
+        return killed
 
     def _run_callbacks(self):
         _log.debug('%s _run_callbacks', self.log_prefix)
@@ -696,6 +707,7 @@ class Pipeline(object):
         wait until they are all finished."""
 
         _log.debug("Pipeline {} launching run components".format(self.id))
+        DynamicUtil.log_dynamic.info("Starting pipeline {}".format(self.id))
         rmonitor = None
         for run in self.runs:
             if run.name == 'rmonitor':
@@ -720,6 +732,7 @@ class Pipeline(object):
             rmonitor.start()
             if rmonitor.sleep_after:
                 time.sleep(rmonitor.sleep_after)
+        DynamicUtil.log_dynamic.info("Done launching run components for pipeline {}".format(self.id))
 
     def get_n_restarts(self):
         return self._num_restart
@@ -731,6 +744,7 @@ class Pipeline(object):
 
         _log.debug("Pipeline {} restarting runs, iteration number {}".format(self.id, self._num_restart + 1))
         _log.debug("Pipeline {} launching run components".format(self.id))
+        DynamicUtil.log_dynamic.info("Re-starting pipeline {}, iteration {}".format(self.id, self._num_restart + 1))
         runs = []
         self._pipe_thread.join()
         self._num_restart += 1 
@@ -783,6 +797,7 @@ class Pipeline(object):
         self._pipe_thread = self._temp_thread
         self._temp_thread = None
 
+        DynamicUtil.log_dynamic.info("Done re-launching run components for pipeline {}, iteration {}".format(self.id, self._num_restart + 1))
 
     def get_assigned_nodes(self):
         return list(self.nodes_assigned.queue)
@@ -896,13 +911,15 @@ class Pipeline(object):
         for run_name in runs:
             for run in self._active_runs:
                 if run.name == run_name:
-                    str = "Kill requested for pipeline " +  self.id + "'s run : " + run.name
-                    _log.warn(str)
+                    str1 = "Kill requested for pipeline " +  self.id + "'s run : " + run.name
+                    _log.warn(str1)
                     #print("Found run ", run.name, " with task", str(run.tasks_per_node), flush = True)
                     print("Killing the run" + run.name, flush = True ) 	 
                     run._deliberatily_killed = True
+                    DynamicUtil.log_dynamic.info("Kill requested for component {} of pipeline {} at iteration {}".format(run_name, self.id, self._num_restart + 1))
                     run.kill()
                     run._kill_thread.join() 
+                    DynamicUtil.log_dynamic.info("Killed component {} of pipeline {} at iteration {}".format(run_name, self.id, self._num_restart + 1))
 
     def stop_run_get_cres(self, runs, run_params = None):
          cpus = []
@@ -914,29 +931,39 @@ class Pipeline(object):
                      steps = [] 
                      if run_params is not None and run_name in run_params.keys():
                          r_p = run_params[run_name]
-                     str = "Kill requested for pipeline " +  self.id + "'s run : " + run.name
-                     _log.warn(str)
-                     #print("Found run ", run.name, " with task", str(run.tasks_per_node), flush = True)
-                     print("Killing the run" + run.name, flush = True ) 	 
+                         print("Found run ", run.name, " with run_params", r_p, flush = True)
+                     DynamicUtil.log_dynamic.info("Kill requested component {} of pipeline {} at iteration {}".format(run_name, self.id, self._num_restart + 1))
                      run._deliberatily_killed = True
                      run.kill()
-                     run._kill_thread.join()
+                     if run._kill_thread is None:
+                         return cpus, gpus 
 
-                     if 'steps' in r_p.keys():
-                         steps = r_p['steps'] 
+                     str1 = "Kill requested for pipeline " +  self.id + "'s run : " + run.name
+                     print("Killing the run " + run.name, flush = True ) 	 
+                     _log.warn(str1)
+
+                     run._kill_thread.join()
+                     DynamicUtil.log_dynamic.info("Killed component {} of pipeline {} at iteration {}".format(run_name, self.id, self._num_restart + 1))
+
+                     if 'nstep' in r_p.keys():
+                         steps = r_p['nstep'] 
                      if len(steps) != 0:
-                         inputfile = steps[0]  
-                         key = steps[0]  
-                         value = steps[0]
-                         bashCommand = "sed -i 's/" + key + "=*/" 
+                         inputfile = steps[0].strip()  
+                         key = steps[1].strip()  
+                         value = str(steps[2])
+                         bashCommand = "sed -i 's/" + key + "=.*/" 
                          bashCommand += key + "=" + value + "/g'  " + run.working_dir +"/" + inputfile 
                          subprocess.run( bashCommand, shell=True, check=True,
-   				 executable='/bin/bash')  
+   				 executable='/bin/bash')
+                         print("changed the input params using ", bashCommand)  
+                     DynamicUtil.log_dynamic.info("Reconfigured component {} with command {}={} in inputfile {} of pipeline {} at iteration {}".format(run_name, key, value, run.working_dir +"/" + inputfile, self.id, self._num_restart + 1))
                      if run.node_config is not None:
                          for i in range(run.node_config.num_ranks_per_node):
                              cpus.extend(run.node_config.cpu[i]) 
                          for i in range(len(run.node_config.gpu)):
                              gpus.extend(run.node_config.cpu[i]) 
+                         DynamicUtil.log_dynamic.info("Freed resources cpus {} gpus {} pipeline {} at iteration {}".format(cpus, gpus, self.id, self._num_restart + 1))
+                     break
          return cpus, gpus  
     
     def get_active_config(self, run_names, all=1):
@@ -944,14 +971,17 @@ class Pipeline(object):
          total_per_node = 0
          cpus = []
          gpus = []
-         for run in self._active,s:
+         for run in self._active_runs:
               if all == 0 and run.name not in run_names:
                   continue
 
               run_out_names.append(run.name)
  
               if run.node_config is None:
-                  total_per_node += run.tasks_per_node
+                  if run.tasks_per_node is None:
+                      total_per_node += run.nprocs
+                  else:
+                      total_per_node +=  run.tasks_per_node
               else:
                   total_per_node += run.node_config.num_ranks_per_node
                   for i in range(run.node_config.num_ranks_per_node):
@@ -965,42 +995,52 @@ class Pipeline(object):
         for run in self._active_runs:
              #print("Found run ", run.name, " with task", str(run.tasks_per_node) + "\n", flush = True)
              print("Killing the run" + run.name + "\n", flush = True ) 	 
+             DynamicUtil.log_dynamic.info("kill requested for {} pipeline {} at iteration {}".format(run.name, self.id, self._num_restart + 1))
              run._deliberatily_killed = False 
              run.kill()
 
     
     def restart_runs(self, runs, runs_params, cpus, gpus):
-        print("Inside force restart\n")
+        print("Inside force restart...restarting ", runs , "\n")
         for run_name in runs:
             new_args = "" 
             cpu_nodes = 0
             gpu_nodes = 0
             command = ""
-            params = run_params[run_name]
+            params = {}
+            if run_name in runs_params.keys():
+                params = runs_params[run_name]
 
-            if "args" in params.keys():
-                new_args = params["args"]
+                if "args" in params.keys():
+                    new_args = params["args"]
 
-            if "cpu_nodes" in params.keys():
-                cpu_nodes = int(params["cpu_nodes"])
+                if "cpus_node" in params.keys():
+                    cpu_nodes = int(params["cpus_node"])
  
-            if "gpu_nodes" in params.keys():
-                gpu_nodes = int(params["gpu_nodes"])
+                if "gpus_node" in params.keys():
+                    gpu_nodes = int(params["gpus_node"])
 
-            if "command" in params.keys():
-                command = int(params["command"])
+                if "command" in params.keys():
+                    command = params["command"]
 
-            self._pipe_thread.join()
+                print("Command ...", command, flush = True ) 
+
             new_procs = 0
             run = None
             found = 0
             for run in self._active_runs:
                 if run.name == run_name: 
-                    print("Already running ")
-                    return
+                    if run.wait_for_kill() == True:
+                        print("Found the run ", run.name , " in run name..")
+                        found = 1
+                        break
+                    else: 
+                        print("Already running...kill the run first ")
+                        return
+ 
             for run in self.runs:
                  if run.name == run_name:
-                     print("Found the run in run name..")
+                     print("Found the run ", run.name , " in run name..")
                      found = 1
                      break  
 
@@ -1024,20 +1064,25 @@ class Pipeline(object):
                                run.runner_override )
 
                  if command == "add":
-                     new_run.tasks_per_node += cpu_nodes
-                     new_run.nprocs = run.nodes * new_run.tasks_per_node
+                     if new_run.tasks_per_node is not None:
+                         new_run.tasks_per_node += cpu_nodes
+                         new_run.nprocs = run.nodes * new_run.tasks_per_node
+                     else: 
+                         new_run.nprocs += cpu_nodes
                  
                  elif command == "del":
-                     new_run.tasks_per_node -= cpu_nodes
-                     new_run.nprocs = run.nodes * new_run.tasks_per_node
+                     if new_run.tasks_per_node is not None:
+                         new_run.tasks_per_node -= cpu_nodes
+                         new_run.nprocs = run.nodes * new_run.tasks_per_node
+                     else: 
+                         new_run.nprocs -= cpu_nodes
                  else:
                      new_run.tasks_per_node = run.tasks_per_node 
                      new_run.nprocs = run.nprocs
 
-                 cpu_nodes =  new_run.tasks_per_node
-                 gpu_nodes = len(run.node_config.gpu) 
-
                  if run.node_config is not None:
+                     cpu_nodes =  new_run.tasks_per_node
+                     gpu_nodes = len(run.node_config.gpu) 
                      self.set_dynamic_node_config(new_run, cpu_nodes, cpus, gpu_nodes, gpus)
 
                  with self._state_lock:
@@ -1047,11 +1092,15 @@ class Pipeline(object):
                      new_run.machine = run.machine
                      new_run.callbacks = run.callbacks
                      self.runs.remove(run)	
-                     new_run.nodes = int(math.ceil(new_run.nprocs / new_run.tasks_per_node))
-                     print("Now starting a new job...\n", flush = True ) 	 
+                     if new_run.tasks_per_node is not None:
+                         new_run.nodes = int(math.ceil(new_run.nprocs / new_run.tasks_per_node))
+                     else:
+                         new_run.nodes =  new_run.nprocs 
+                     print("Now starting a new job...with nprocs ", new_run.nprocs, " nodes ", new_run.nodes, " \n", flush = True ) 	 
                      self._active_runs.add(new_run)
                      self.total_procs -= run.nprocs
-                     self.total_procs += new_runs.nprocs
+                     self.total_procs += new_run.nprocs
+                     DynamicUtil.log_dynamic.info("Restarting run {} with process {} nodes {} pipeline {} at iteration {}".format(new_run.name, new_run.nprocs, new_run.nodes, self.id, self._num_restart + 1))
                      new_run.start()
                      if new_run.sleep_after:
                          time.sleep(new_run.sleep_after)

@@ -1,0 +1,188 @@
+&sml_param
+sml_marker_temp_factor=1.5d0
+sml_machine=0             ! 0 circular, 1:D3D, 
+sml_node_file='cyclone4mm_64.eqd.node'   ! node coordinates and more
+sml_ele_file='cyclone4mm_64.eqd.ele'     ! node connectivity
+sml_co_cur_bt=.t.         ! Controls direction of toroidal magnetic field: .t. --> co-current direction, .f. --> counter-current
+sml_special=0             ! 0: normal simulation, 1: single particle simulation
+sml_pol_decomp=.true.
+sml_dt=0.0025D0            ! delta-t for one time step - unit of toroidal transit time. 
+sml_mstep=10             ! total number of time steps
+sml_deltaf=.false.            ! delta-f simulation switch - incomplete
+sml_deltaf_elec=.false.       ! delta-f switch for electrons
+sml_electron_on=.false.         ! electron simulation on/off
+sml_nhybrid=1             ! Switch to control time integration scheme
+sml_bounce=2              ! Particle motion boundary condition 
+                          ! 1 for edge simulation (including open field line region)
+                          ! 2 for core simulation (excluding open field line region)
+sml_fem_matrix=1          ! meaningful only if sml_iter_solver=.f.
+sml_inpsi=0.0             ! inner boundary of simulation - unit of eq_x_psi
+sml_outpsi=0.975           ! outer boundary of simulation - unit of eq_x_psi
+sml_restart_write_period=10  ! Time interval for restart data output
+sml_restart=.t.           ! Restart yes/no
+sml_initial_deltaf_noise=1D-15  ! Only for delta-f simulation
+sml_zero_inner_bd=1       ! Simulation including magnetic axis
+sml_f0_1_Ln=2.22D0        ! Only for delta-f
+sml_f0_1_Lt=6.92D0        ! Only for delta-f
+sml_input_file_dir='../XGC-1_inputs'
+sml_bd_ext_delta1=-0.01
+sml_bd_ext_delta3=0.01
+sml_bd_ext_delta1H=-0.01
+!sml_bd_ext_delta3H=0.01
+sml_bd_ext_delta2=-0.02
+sml_bd_ext_delta4=0.02
+sml_bd_ext_delta2H=-0.02
+!sml_bd_ext_delta4H=0.01
+!sml_bd_ext_delta1=-0.01
+!sml_bd_ext_delta3=0.005
+!sml_bd_ext_delta1H=-0.01
+!sml_bd_ext_delta3H=0.01
+!sml_bd_ext_delta2=-0.01
+!sml_bd_ext_delta4=0.01
+!sml_bd_ext_delta2H=-0.01
+!!sml_bd_ext_delta4H=0.01
+sml_weight_max=2D0
+sml_sheath_mode=0         ! Use logical sheath, 0:off, 1:XGC1-sheath, 2:XGC0-sheath
+sml_sheath_adjust=.false.  ! currently meaningless
+sml_iter_solver=.true.    ! Use iterative phi-00 solver
+sml_iter_solver_niter=20  ! Number of iterations
+sml_turb_efield=.true.    ! poloidal el. field on/off
+sml_00_efield=.true.      ! el. field due to phi-00 on/off
+sml_00_npsi=150           ! 1D grid size for simple phi-00 solver
+sml_exclude_private=.false.  ! Include privat flux-region, .false. --> yes, .true. --> no
+!sml_poisson_factor=1.0    ! Parameter controlling Poisson's equation, set 1 if electrons are off
+                          ! I am still experimenting with this capability, 1 should always give stable simulations
+!sml_force_tri_search=.true. ! Force use of triangle search
+!! For coupling
+sml_nphi_total=2         ! parameters for coupling. nphi total
+sml_grid_nrho=2
+!sml_nstep_xgc1=100
+sml_poisson_solver_type=0
+sml_source=.true.
+sml_monte_num=10000
+/
+
+&ptl_param
+ptl_mass_au=2D0             ! 1 for hydrogen, 2 for deutron
+ptl_charge_eu=1D0            ! ion charge
+ptl_num=100000
+ptl_maxnum=5000000
+/
+
+&eq_param ! Initial equilibrium profile - Tanh profile
+eq_filename='cyclone4mm_64.eqd'
+eq_den_shape=5
+eq_den_v1=4.0D19          ! inside value of density m^-3
+eq_den_v2=0.2D19          ! outside value of density  m^-3
+eq_den_x1=1.05D0          ! pedestal center
+eq_den_x2=0.05D0          ! pedestal width
+eq_den_v3=6.0D19
+eq_den_x3=0D0
+eq_tempi_shape=-1
+eq_tempe_shape=-1
+eq_tempi_file='temperature_hcpl.prf'
+eq_tempe_file='temperature_hcpl.prf'
+eq_tempi_x1=0.97D0
+eq_tempe_x1=0.97D0
+eq_tempi_x2=0.07D0
+eq_tempe_x2=0.07D0
+eq_tempi_v1=1D3      ! ion temperature (inside) - eV
+eq_tempi_v2=1d2     ! ion temperature (outside) - eV
+eq_tempe_v1=1D3
+eq_tempe_v2=1D2
+eq_tempi_v3=5.7D3
+eq_tempi_x3=0D0
+eq_tempe_v3=5.7D3
+eq_tempe_x3=0D0
+/
+
+&efld_param ! E-field calculation
+!efld_mode=2              ! 0 zero efield, 1 static efield, 2 self-consistent
+/
+
+&col_param  ! Collision
+col_mode=0  ! 0 : off , 1 monte-carlo (non-conserving) 2: monte-carlo (conserving)
+col_period=3  ! period (in time steps) for collision
+col_moving_frame=.true.
+col_varying_bg=1
+col_accel=.false.
+col_accel_pin1=0.03D0
+col_accel_pout1=0.9D0
+col_accel_factor1=10D0
+/
+
+&diag_param ! diagnosis
+diag_1d_period=10000  ! period for diagnostic output
+diag_1d_npsi=120
+!diag_tavg_on=.true.
+diag_tracer_period=20000
+diag_2d_on=.true.  ! 2D diagnostic output
+!diag_3d_on=.true.
+!diag_3d_period=20
+/
+
+&neu_param            ! neutral collision
+neu_col_mode=0        ! not ready yet
+/
+
+&src_param
+src_narea=2
+src_period=1000
+src_heat_power1=150D6
+src_pin1=0.05
+src_pout1=0.35
+src_decay_width1=0.10
+
+src_pin2=0.80D0
+src_pout2=0.95D0
+src_decay_width2=0.15
+src_heat_power2=-150D6
+/
+
+&lim_param            ! limiter 
+/
+
+&shpot_param
+shpot_period=1000       ! Options for sml_sheath_mode=2
+shpot_globalsheath_period=1
+/
+
+&smooth_param
+smooth_mode_in=0
+smooth_H_mode_in=2
+smooth_H_n_in=1
+smooth_r1_n_in=2
+smooth_r1_d0_in=0.0042  ! smoothing radius for radial smoothing
+smooth_r1_type_in=1
+smooth_diag_mode_in=-1
+smooth_pol_efield=.true.   ! Smooth pert. potential along flux surface before computing E-field ---> Works with structured grid only!!!
+smooth_pol_width=8 ! Half-width of smoothing kernel (in nodes)
+smooth_pol_d0=3.0D0       ! Half-width of smoothing kernel (in grid points)
+smooth_rad_efield=.false.  ! Smooth pert. potential radially
+/
+
+&tbl_param
+/
+
+&mon_param
+/
+
+&f0_param
+/
+
+&ptb_3db_param
+/
+
+&diff_param
+/
+
+&adios_param
+/
+
+&coupling_param
+sml_coupling_on=.true.
+sml_coupling_xgc1_dir='../XGC1_exec'
+sml_coupling_xgca_dir='../XGCa_exec'
+sml_coupling_shared_dir='../coupling'
+/
+
