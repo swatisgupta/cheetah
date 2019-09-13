@@ -3,15 +3,15 @@ import os
 import logging
 
 
-logging.basicConfig(
-    format='%(asctime)s %(levelname)-8s %(message)s',
-    level=logging.INFO,
-    datefmt='%Y-%m-%d %H:%M:%S')
+#logging.basicConfig(
+#    format='%(asctime)s %(levelname)-8s %(message)s',
+#    level=logging.INFO,
+#    datefmt='%Y-%m-%d %H:%M:%S')
 
 
 class DynamicUtil():
 
-   _log_dynamic = logging.getLogger('codar.savanna.dynamic')
+   log_dynamic = logging.getLogger('codar.savanna.dynamic')
 
    @staticmethod
    def get_env(env, key, default=""):

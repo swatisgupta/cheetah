@@ -429,7 +429,7 @@ class DynamicControls():
             eng = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_ENG", "None")
             stream_file = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_STREAM", "None")
             params = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_MPARAMS", "")
-            workflow_model = DynamicUtil.get_env("SAVANNA_MONITOR_MODEL", "outsteps2")
+            workflow_model = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_MODEL", "outsteps2")
             priority = int(DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_PRIORITY", "1"))
             if workflow_model == "memory":
                 metric = DynamicUtil.get_env(run.env, "TAU_METRICS", "")
