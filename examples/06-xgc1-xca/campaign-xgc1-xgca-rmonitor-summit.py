@@ -45,9 +45,22 @@ class XGC1XCA(Campaign):
     nprocs_per_node = 6
     nthreads = 28
     nprocs = 12 
-    NPTL=250000 #For small scale run
-    NPTL=100000 #For test run
-    t_particles = NPTL #* nprocs * nthreads * 10 * 8 
+    t_particles=250000 #For small scale run
+    t_particles=100000 #For test run
+    #t_particles = 100000 * nprocs * nthreads * 10 * 8 
+
+    """ 
+    OUTSETPS_2 MODEL PARAMETERS:
+    1.) Initial value to start for counting steps,
+    2.) Frequency at which outputsteps are written, 
+    3.) Number of steps (M1) to be used for computing stopping creteria ( used along with function defined as paramemter 7.
+    4.) Number of digits in Output File
+    5.) Input file name to edit parameters for rerun 
+    6.) Parameter key to change for rerun
+    7.) Function to use as stopping creteria
+    8.) Iteration frequency at which to check for stopping the component.
+    9.) Maximum steps allowed for this component     
+    """
 
     # Setup the sweep parameters for a Sweep
     sweep1_parameters = [
@@ -55,18 +68,6 @@ class XGC1XCA(Campaign):
             p.ParamRunner       ('xgc1', 'nprocs', [nprocs]),
             p.ParamEnvVar       ('xgc1', 'openmp', 'OMP_NUM_THREADS', [nthreads]),
             p.ParamEnvVar       ('xgc1', 'savanna_model', 'SAVANNA_MONITOR_MODEL', ['outsetps2']),
-            ''' 
-            OUTSETPS_2 MODEL PARAMETERS:
-            1.) Initial value to start for counting steps,
-            2.) Frequency at which outputsteps are written, 
-            3.) Number of steps (M1) to be used for computing stopping creteria ( used along with function defined as paramemter 7.
-            4.) Number of digits in Output File
-            5.) Input file name to edit parameters for rerun 
-            6.) Parameter key to change for rerun
-            7.) Function to use as stopping creteria
-            8.) Iteration frequency at which to check for stopping the component.
-            9.) Maximum steps allowed for this component     
-            '''
             p.ParamEnvVar       ('xgc1', 'savana_params', 'SAVANNA_MONITOR_MPARAMS', ["0, 2, 100, 5, .bp, input, sml_mstep, fx, 2, 100"]),
             p.ParamEnvVar       ('xgc1', 'savana_stream', 'SAVANNA_MONITOR_STREAM', ['restart_dir/xgc.restart.']),
             p.ParamEnvVar       ('xgc1', 'savana_eng', 'SAVANNA_MONITOR_ENG', ['BPFile']),
@@ -118,7 +119,11 @@ class XGC1XCA(Campaign):
             xgca_node1.cpu[i * ncpus_per_proc + j] = "xgca:{}".format(i)
             print(str(i * ncpus_per_proc + j), " xgca:{}".format(i))
 
-    seperate_node_layout1 = [xgc1_node1, xgca_node1]
+    other_node1 = DTH2CPUNode()
+    other_node1.cpu[0] = "restart1:0"
+    other_node1.cpu[1] = "rmonitor:0"
+    
+    seperate_node_layout1 = [xgc1_node1, xgca_node1, other_node1]
 
     sweep1 = p.Sweep (parameters = sweep1_parameters, node_layout={'summit':seperate_node_layout1}, rc_dependency={'xgca':'xgc1', 'restart1':'xgca'})
 
@@ -128,7 +133,7 @@ class XGC1XCA(Campaign):
                                 #per_run_timeout=400,    # Timeout for each experiment                                
                                 parameter_groups=[sweep1],   # Sweeps to include in this group
                                 launch_mode='default',  # Launch mode: default, or MPMD if supported
-                                nodes=2,  # No. of nodes for the batch job.
+                                nodes=3,  # No. of nodes for the batch job.
                                 run_repetitions=0,  # No. of times each experiment in the group must be repeated (Total no. of runs here will be 3)
                                 component_subdirs = True, # Codes have their own separate workspace in the experiment directory
                                 component_inputs = {'xgc1': ['XGC1_exec/adios.in','XGC1_exec/mon_in', 'XGC1_exec/petsc.rc',  SymLink('/homes/ssinghal/XGC-Devel-xgc1-xgca-coupling/xgc_build/xgc-es'), SymLink('XGC-1_inputs'), 'XGC1_exec/adioscfg.xml'], 
