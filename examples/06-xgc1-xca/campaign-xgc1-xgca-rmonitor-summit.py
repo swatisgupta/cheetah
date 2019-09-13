@@ -18,7 +18,7 @@ class XGC1XCA(Campaign):
     codes = [ ("xgc1", dict(exe="run-xgc1.sh", adios_xml_file='adios2cfg.xml', runner_override=False)),
               ("xgca", dict(exe="run-xgca.sh", adios_xml_file='adios2cfg.xml', runner_override=False)),
               ("restart1", dict(exe="restart.sh", runner_override=True)),
-              ("rmonitor", dict(exe="/lustre/ssinghal/Dynamic_workflow_management/rmonitor/bin/r_monitor", runner_override=True)),
+              ("rmonitor", dict(exe="/gpfs/alpine/scratch/ssinghal/csc299/Dynamic_workflow_management/rmonitor/bin/r_monitor", runner_override=True)),
             ]
  
     # List of machines on which this code can be run
@@ -136,8 +136,8 @@ class XGC1XCA(Campaign):
                                 nodes=33,  # No. of nodes for the batch job.
                                 run_repetitions=0,  # No. of times each experiment in the group must be repeated (Total no. of runs here will be 3)
                                 component_subdirs = True, # Codes have their own separate workspace in the experiment directory
-                                component_inputs = {'xgc1': ['XGC1_exec/adios.in','XGC1_exec/mon_in', 'XGC1_exec/petsc.rc',  SymLink('/homes/ssinghal/XGC-Devel-xgc1-xgca-coupling/xgc_build/xgc-es'), SymLink('XGC-1_inputs'), 'XGC1_exec/adioscfg.xml'], 
-                                                    'xgca': ['XGCa_exec/adios.in','XGCa_exec/mon_in', 'XGCa_exec/petsc.rc',  SymLink('/homes/ssinghal/XGC-Devel-xgc1-xgca-coupling/xgc_build/xgca'), SymLink('XGC-1_inputs'), 'XGCa_exec/adioscfg.xml'],
+                                component_inputs = {'xgc1': ['XGC1_exec/adios.in','XGC1_exec/mon_in', 'XGC1_exec/petsc.rc',  SymLink('/ccs/home/ssinghal/XGC-Devel-xgc1-xgca-coupling/xgc_build/xgc-es'), SymLink('XGC-1_inputs'), 'XGC1_exec/adioscfg.xml'], 
+                                                    'xgca': ['XGCa_exec/adios.in','XGCa_exec/mon_in', 'XGCa_exec/petsc.rc',  SymLink('/ccs/home/ssinghal/XGC-Devel-xgc1-xgca-coupling/xgc_build/xgca'), SymLink('XGC-1_inputs'), 'XGCa_exec/adioscfg.xml'],
                                                     }
 
                                 )
