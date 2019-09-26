@@ -1,7 +1,6 @@
 from codar.cheetah import Campaign
 from codar.cheetah import parameters as p
 from codar.savanna.machines import SummitNode
-from codar.savanna.machines import DTH2CPUNode
 from codar.cheetah.parameters import SymLink
 import copy
 import math
@@ -18,7 +17,7 @@ class XGC1XCA(Campaign):
     codes = [ ("xgc1", dict(exe="run-xgc1.sh", adios_xml_file='adios2cfg.xml', runner_override=False)),
               ("xgca", dict(exe="run-xgca.sh", adios_xml_file='adios2cfg.xml', runner_override=False)),
               ("restart1", dict(exe="restart.sh", runner_override=True)),
-              ("rmonitor", dict(exe="/gpfs/alpine/scratch/ssinghal/csc299/Dynamic_workflow_management/rmonitor/bin/r_monitor", runner_override=True)),
+              ("rmonitor", dict(exe="/gpfs/alpine/csc299/scratch/ssinghal/XGC1-XGCA-EXPS/Dynamic_workflow_management/rmonitor/bin/r_monitor", runner_override=True)),
             ]
  
     # List of machines on which this code can be run
@@ -81,7 +80,7 @@ class XGC1XCA(Campaign):
             p.ParamKeyValue       ('xgc1', 'step_freq', 'XGC1_exec/input', 'sml_restart_write_period', [2]),
             p.ParamKeyValue       ('xgc1', '1d_diag', 'XGC1_exec/input', 'diag_1d_period', [1]),
             p.ParamKeyValue       ('xgc1', 'num_particles', 'XGC1_exec/input', 'ptl_num', [t_particles]),
-            p.ParamKeyValue       ('xgc1', 'max_particles', 'XGC1_exec/input', 'ptl_maximum', [5000000]),
+            p.ParamKeyValue       ('xgc1', 'max_particles', 'XGC1_exec/input', 'ptl_maxnum', [5000000]),
 
             # Sweep over four values for the nprocs 
             p.ParamRunner       ('xgca', 'nprocs', [nprocs]),
@@ -89,7 +88,7 @@ class XGC1XCA(Campaign):
             p.ParamEnvVar       ('xgca', 'savanna_model', 'SAVANNA_MONITOR_MODEL', ['outsetps2']),
             p.ParamEnvVar       ('xgca', 'savana_stream', 'SAVANNA_MONITOR_STREAM', ['restart_dir/xgc.restart.']),
             p.ParamEnvVar       ('xgca', 'savana_eng', 'SAVANNA_MONITOR_ENG', ['BPFile']),
-            p.ParamEnvVar       ('xgca', 'savana_params', 'SAVANNA_MONITOR_MPARAMS', ["0, 2, 100, 5, .bp, input, sml_mstep, log2, 2, 100"]), 
+            p.ParamEnvVar       ('xgca', 'savana_params', 'SAVANNA_MONITOR_MPARAMS', ["0, 2, 95, 5, .bp, input, sml_mstep, fx, 2, 100"]), 
             p.ParamKeyValue       ('xgca', 'nphi', 'XGCa_exec/input', 'sml_nphi_total', [2]), #2 or nprocs/192
             p.ParamKeyValue       ('xgca', 'grid', 'XGCa_exec/input', 'sml_grid_nrho', [2]),  #2 or 6
             p.ParamKeyValue       ('xgca', 'inputdir', 'XGCa_exec/input', 'sml_input_file_dir', ["'XGC-1_inputs'"]),
@@ -99,7 +98,7 @@ class XGC1XCA(Campaign):
             p.ParamKeyValue       ('xgca', 'step_freq', 'XGCa_exec/input', 'sml_restart_write_period', [2]),
             p.ParamKeyValue       ('xgca', '1d_diag', 'XGCa_exec/input', 'diag_1d_period', [1]),
             p.ParamKeyValue       ('xgca', 'num_particles', 'XGCa_exec/input', 'ptl_num', [t_particles]),
-            p.ParamKeyValue       ('xgca', 'max_particles', 'XGCa_exec/input', 'ptl_maximum', [5000000]),
+            p.ParamKeyValue       ('xgca', 'max_particles', 'XGCa_exec/input', 'ptl_maxnum', [5000000]),
 
             p.ParamRunner       ('rmonitor', 'nprocs', [1]),
             p.ParamRunner       ('restart1', 'nprocs', [1]),
@@ -113,13 +112,21 @@ class XGC1XCA(Campaign):
             xgc1_node1.cpu[i * ncpus_per_proc + j] = "xgc1:{}".format(i)
             print(str(i * ncpus_per_proc + j), " xgc1:{}".format(i))
 
+    for i in range(nprocs_per_node):
+        xgc1_node1.gpu[i] = "xgc1:{}".format(i)
+ 
     xgca_node1 = SummitNode()
     for i in range(nprocs_per_node):
         for j in range(ncpus_per_proc):
             xgca_node1.cpu[i * ncpus_per_proc + j] = "xgca:{}".format(i)
             print(str(i * ncpus_per_proc + j), " xgca:{}".format(i))
 
-    other_node1 = DTH2CPUNode()
+    for i in range(nprocs_per_node):
+        xgca_node1.gpu[i] = ["xgca:{}".format(i)]
+        xgc1_node1.gpu[i] = ["xgc1:{}".format(i)]
+
+
+    other_node1 = SummitNode()
     other_node1.cpu[0] = "restart1:0"
     other_node1.cpu[1] = "rmonitor:0"
     
