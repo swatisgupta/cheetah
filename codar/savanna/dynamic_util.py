@@ -44,13 +44,15 @@ class DynamicUtil():
            for run in pipeline.runs:
                if run.name == 'rmonitor' or not run.monitor:
                    continue
-               print("Run name", run.name)
                run_map = {}
+               print("Run name", run.name,  run.tasks_per_node, run.nodes_assigned)
                n_ranks_per_node = 0
                if run.nodes_assigned is None:
                    n_ranks_per_node = run.tasks_per_node
+                   print("Run name", run.name,  run.tasks_per_node)
                elif asgn_node in run.nodes_assigned: 
                    n_ranks_per_node = int(run.nprocs/len(run.nodes_assigned))
+                   print("Run name", run.name,  run.nodes_assigned)
                    #index = DynamicUtil.get_index(run.nodes_assigned, asgn_node)
                if n_ranks_per_node != 0 and (index + 1) * n_ranks_per_node <= run.nprocs: # and run.get_start_time > time.time():
                    ranks = list(range(index * n_ranks_per_node, index * n_ranks_per_node + n_ranks_per_node))

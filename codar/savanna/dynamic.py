@@ -131,7 +131,7 @@ class DynamicControls():
                #print("Current steps ", r_steps,  " : Terminate after ", restart_steps)
                if r_steps != -1 and r_steps >= restart_steps:
                    print("Stopping the pipeline: ", pipeline_id, " Timestamp : ", time.time())
-                   DynamicUtil.log_dynamic.info("Total steps completed {} for pipeline {}".format(r_steps, self.id))
+                   DynamicUtil.log_dynamic.info("Total steps completed {} for pipeline {}".format(r_steps, pipeline_id))
                    self.consumer.set_pipeline_restart(pipeline_id, False)
                    self.consumer.stop_pipeline_all(pipeline_id)
                    print("Done stopping the pipeline: ", pipeline_id, " Timestamp : ", time.time())
@@ -141,6 +141,10 @@ class DynamicControls():
                    run_p = {}
                    run_map = self.pipeline_runs[pipeline_id] 
                    for run in run_map.keys():
+
+                       if run not in n_map['STEPS']:
+                           continue
+
                        r_params = run_map[run]
                        #print("Parameters for ", run, "are ", r_params) 
                        if r_params: 
@@ -158,7 +162,7 @@ class DynamicControls():
                            print("run condition for run ", run, " is ", run_cond, " step function is ", step_fn,  flush = True)   
                            if niter % ch_iter == 0 and last_killed < niter and n_map['STEPS'][run] >= run_cond and n_map['STEPS'][run] < max_iter:
                                run_names.append(run)
-                               DynamicUtil.log_dynamic.info("Total steps completed {}, steps completed by run {} at iteration {} are {} >= {} for pipeline {}".format(r_steps, run, niter, n_map['STEPS'][run], run_cond,  self.id))
+                               DynamicUtil.log_dynamic.info("Total steps completed {}, steps completed by run {} at iteration {} are {} >= {} for pipeline {}".format(r_steps, run, niter, n_map['STEPS'][run], run_cond,  pipeline_id))
                                self.pipeline_runs[pipeline_id][run]['model_params'][2] = run_cond 
                                self.pipeline_runs[pipeline_id][run]['model_params'][9] = n_map['STEPS'][run]
                                self.pipeline_runs[pipeline_id][run]['last_killed'] = niter 
@@ -207,6 +211,8 @@ class DynamicControls():
                    if r_params: 
                        expected_steptime = int(r_params['model_params'][1])
                        do_change = int(r_params['model_params'][3])
+                       if run not in n_map['N_STEPS']:
+                           continue:
                        if n_map['N_STEPS'][run] == self.pipeline_runs[pipeline_id][run]['last_killed']: 
                            continue
                        for parents in dag_parent[run].keys():
@@ -292,8 +298,10 @@ class DynamicControls():
         n_p = len(priority.keys())
         sorted_keys = sorted(priority.keys(), reverse=True) 
         no_victim = 0
+        print("Sorted keys are...", sorted_keys)
         for p in sorted_keys:
             runs = priority[p]
+            print("Looking for runs...", runs)
             found = 1 
             for run in  r_names:
                 if run in runs:
