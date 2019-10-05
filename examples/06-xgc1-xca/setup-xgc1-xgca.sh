@@ -23,4 +23,4 @@ else
     mkdir -p ./coupling
 fi
 
-cp /lustre/ssinghal/DYNAMIC_EXPERIMENTS/XGC1-XGCA/06-xgc1-xca/workflow_dag.txt . 
+cp /gpfs/alpine/scratch/ssinghal/csc299/XGC1-XGCA-EXPS/06-xgc1-xca/workflow_dag.txt . 
