@@ -83,18 +83,18 @@ class DynamicControls():
                 sys.stdout.flush()
                 message = self.recv_socket.recv()
                 message = message.decode("utf-8") 
-                print("Received a critical update from monitor : ", message)
+                #print("Received a critical update from monitor : ", message)
                 self.recv_socket.send_string("OK")
-                print("Send ack : OK")
+                #print("Send ack : OK")
                 sys.stdout.flush()
                 message = json.loads(message)
-                print("Message decoded : ", message)
+                #print("Message decoded : ", message)
                 sys.stdout.flush()
 
                 with self.msg_cond:
                     self.msg_queue.append(message)
  
-                print("Send msg to queue : OK")    
+                #print("Send msg to queue : OK")    
                 sys.stdout.flush()
 
             except Exception as e:
@@ -111,18 +111,18 @@ class DynamicControls():
         return socket
 
     def _decode_and_inact(self, message):
-        print("decoding message type")
-        sys.stdout.flush()
+        #print("decoding message type")
+        #sys.stdout.flush()
         port = message["socket"]
         model = message["model"]
         state = message["message"]
         message_type = message["msg_type"]
         timestamp =  message["timestamp"]
-        print("message type",   message_type )
-        sys.stdout.flush()
+        #print("message type",   message_type )
+        #sys.stdout.flush()
 
         if message_type == "res:connect":
-            print("message type reached",   message_type )
+            #print("message type reached",   message_type )
             sys.stdout.flush()
             with self.pipeline_cond:
                pipeline_id = self.pipelines_oport[port]
@@ -360,7 +360,7 @@ class DynamicControls():
                         print("Sender: Signing off...")
                         continue
 
-                print("Checking queued requests:")
+                #print("Checking queued requests:")
                 with self.msg_cond:
                     print(len(self.msg_queue))
                     while len(self.msg_queue) > 0:
