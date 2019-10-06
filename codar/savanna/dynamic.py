@@ -41,6 +41,7 @@ class DynamicControls():
         self.active_pipelines = []
         self.pipeline_sockets = {}
         self.pipeline_socket_port = {}
+        self.pipeline_socket_ip = {}
         self.pipeline_models = {}
         self.pipeline_restart = {}
         self.pipeline_runs = {} 
@@ -82,9 +83,9 @@ class DynamicControls():
                 sys.stdout.flush()
                 message = self.recv_socket.recv()
                 message = message.decode("utf-8") 
-                #print("Received a critical update from monitor : ", message)
+                print("Received a critical update from monitor : ", message)
                 self.recv_socket.send_string("OK")
-                #print("Send ack : OK")
+                print("Send ack : OK")
                 sys.stdout.flush()
                 message = json.loads(message)
 
@@ -95,8 +96,8 @@ class DynamicControls():
                 print("Reciever : Got exception...", e)
                 sys.stdout.flush() 
   
-    def _open_sender_connections(self, port):
-        address = soc.gethostbyname(soc.gethostname())
+    def _open_sender_connections(self, address, port):
+        #address = soc.gethostbyname(soc.gethostname())
         context = zmq.Context()
         socket = context.socket(zmq.REQ)
         socket_str = "tcp://" + address + ":" + str(port)
@@ -108,7 +109,17 @@ class DynamicControls():
         port = message["socket"]
         model = message["model"]
         state = message["message"]
+        message_type = mesage["msg_type"]
         timestamp =  message["timestamp"]
+
+        if message_type == "res:connect":
+            with self.pipeline_cond:
+               pipeline_id = self.pipelines_oport[port]
+               self.pipeline_socket_ip[pipeline_id] = state
+               print("Will connect to Ip address:", state , "and port ", port, " for pipeline ", pipeline_id) 
+               sys.stdout.flush()
+               return
+
         dereg = False
         pipeline_id = -1
         if model == "outsteps2":
@@ -338,7 +349,7 @@ class DynamicControls():
                         print("Sender: Signing off...")
                         continue
 
-                #print("Checking queued requests")
+                print("Checking queued requests")
                 with self.msg_cond:
                     while len(self.msg_queue) > 0:
                         msg = self.msg_queue[0]
@@ -351,8 +362,12 @@ class DynamicControls():
                          model = self.pipeline_models[id]
                          socket = None 
                          if self.pipeline_sockets[id] is None:
-                             port = self.pipeline_socket_port[id] 
-                             self.pipeline_sockets[id] = self._open_sender_connections(port) 
+                             if self.pipeline_socket_ip[id] is not None:
+                                 port = self.pipeline_socket_port[id] 
+                                 ip = self.pipeline_socket_ip[id]
+                                 self.pipeline_sockets[id] = self._open_sender_connections(ip, port)
+                             else:
+                                 continue  
                          socket = self.pipeline_sockets[id]
                          request = self._create_request(model, datetime.datetime.now() - self.starttime , "req:get_update")
                          #print("Sending request ", request, " to pipeline :", id)
@@ -371,6 +386,7 @@ class DynamicControls():
             self.monitors[pipeline.id] = rmonitor
             self.pipeline_socket_port[pipeline.id] = self.cur_oport 
             self.pipeline_sockets[pipeline.id] = None
+            self.pipeline_socket_ip[pipeline.id] = None
             self.pipeline_models[pipeline.id] = model
             self.pipeline_dag[pipeline.id] = dag
             self.pipeline_restart[pipeline.id] = restart_steps 
