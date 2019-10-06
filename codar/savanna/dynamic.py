@@ -212,7 +212,7 @@ class DynamicControls():
                        expected_steptime = int(r_params['model_params'][1])
                        do_change = int(r_params['model_params'][3])
                        if run not in n_map['N_STEPS']:
-                           continue:
+                           continue
                        if n_map['N_STEPS'][run] == self.pipeline_runs[pipeline_id][run]['last_killed']: 
                            continue
                        for parents in dag_parent[run].keys():
