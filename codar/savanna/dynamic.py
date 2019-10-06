@@ -88,9 +88,14 @@ class DynamicControls():
                 print("Send ack : OK")
                 sys.stdout.flush()
                 message = json.loads(message)
+                print("Message decoded : ", message)
+                sys.stdout.flush()
 
                 with self.msg_cond:
-                    self.msg_queue.append(message) 
+                    self.msg_queue.append(message)
+ 
+                print("Send msg to queue : OK")    
+                sys.stdout.flush()
 
             except Exception as e:
                 print("Reciever : Got exception...", e)
@@ -106,13 +111,19 @@ class DynamicControls():
         return socket
 
     def _decode_and_inact(self, message):
+        print("decoding message type")
+        sys.stdout.flush()
         port = message["socket"]
         model = message["model"]
         state = message["message"]
-        message_type = mesage["msg_type"]
+        message_type = message["msg_type"]
         timestamp =  message["timestamp"]
+        print("message type",   message_type )
+        sys.stdout.flush()
 
         if message_type == "res:connect":
+            print("message type reached",   message_type )
+            sys.stdout.flush()
             with self.pipeline_cond:
                pipeline_id = self.pipelines_oport[port]
                self.pipeline_socket_ip[pipeline_id] = state
@@ -349,12 +360,14 @@ class DynamicControls():
                         print("Sender: Signing off...")
                         continue
 
-                print("Checking queued requests")
+                print("Checking queued requests:")
                 with self.msg_cond:
+                    print(len(self.msg_queue))
                     while len(self.msg_queue) > 0:
                         msg = self.msg_queue[0]
                         self.msg_queue.remove(msg)
                         print("Recieved from runtime monitor : ", msg)
+                        sys.stdout.flush()
                         self._decode_and_inact(msg)
 
                 with self.pipeline_cond: 
