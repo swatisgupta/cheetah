@@ -957,7 +957,7 @@ class Pipeline(object):
                          subprocess.run( bashCommand, shell=True, check=True,
    				 executable='/bin/bash')
                          print("changed the input params using ", bashCommand)  
-                     DynamicUtil.log_dynamic.info("Reconfigured component {} with command {}={} in inputfile {} of pipeline {} at iteration {}".format(run_name, key, value, run.working_dir +"/" + inputfile, self.id, self._num_restart + 1))
+                         DynamicUtil.log_dynamic.info("Reconfigured component {} with command {}={} in inputfile {} of pipeline {} at iteration {}".format(run_name, key, value, run.working_dir +"/" + inputfile, self.id, self._num_restart + 1))
                      if run.node_config is not None:
                          for i in range(run.node_config.num_ranks_per_node):
                              cpus.extend(run.node_config.cpu[i]) 
