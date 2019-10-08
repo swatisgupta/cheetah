@@ -16,6 +16,7 @@ import codar.savanna.consumer
 from codar.savanna.dynamic_util import DynamicUtil
 from queue import Queue 
 import math
+import datetime
 
 class DynamicControls():
     
@@ -69,7 +70,7 @@ class DynamicControls():
         
         keep_alive = True    
         print("Running receiver at socket ", socket_str)
-    
+        timestamps = {} 
         while keep_alive == True:
             try:
                 with self.recv_cond:
@@ -88,12 +89,19 @@ class DynamicControls():
                 #print("Send ack : OK")
                 sys.stdout.flush()
                 message = json.loads(message)
-                #print("Message decoded : ", message)
+                print("Message decoded : ", message)
                 sys.stdout.flush()
+                port, timestamp = self._get_mesg_address_timestamp(message)
 
-                with self.msg_cond:
-                    self.msg_queue.append(message)
- 
+                if port is not None:
+                    if port not in timestamps.keys():
+                        timestamps[port] = timestamp
+
+                    if timestamps[port] <= timestamp:
+                        with self.msg_cond:
+                            self.msg_queue.append(message)
+                        timestamps[port] = timestamp 
+
                 #print("Send msg to queue : OK")    
                 sys.stdout.flush()
 
@@ -109,6 +117,16 @@ class DynamicControls():
         socket.connect(socket_str)
         print("Opened socket : ", socket_str)
         return socket
+
+    def _get_mesg_address_timestamp(self, message):
+        port = None
+        timestamp = None
+        if "socket" in message.keys():
+            port = message["socket"]
+        if "timestamp" in message.keys():
+            date_time_str = message["timestamp"]
+            timestamp = datetime.datetime.strptime(date_time_str, '%Y-%m-%d %H:%M:%S.%f')
+        return port, timestamp
 
     def _decode_and_inact(self, message):
         #print("decoding message type")
@@ -161,7 +179,8 @@ class DynamicControls():
                else: 
                    run_names = []
                    run_p = {}
-                   run_map = self.pipeline_runs[pipeline_id] 
+                   run_map = self.pipeline_runs[pipeline_id]
+                   
                    for run in run_map.keys():
 
                        if run not in n_map['STEPS']:
@@ -182,7 +201,7 @@ class DynamicControls():
                            elif step_fn == 'log':                    
                                run_cond = run_cond - int(math.log(run_cond))
                            print("run condition for run ", run, " is ", run_cond, " step function is ", step_fn,  flush = True)   
-                           if niter % ch_iter == 0 and last_killed < niter and n_map['STEPS'][run] >= run_cond and n_map['STEPS'][run] < max_iter:
+                           if niter % ch_iter == 0 and last_killed < niter and n_map['STEPS'][run] >= run_cond and n_map['STEPS'][run] < max_iter and r_steps > (ch_iter-1) * max_iter * 2:
                                run_names.append(run)
                                DynamicUtil.log_dynamic.info("Total steps completed {}, steps completed by run {} at iteration {} are {} >= {} for pipeline {}".format(r_steps, run, niter, n_map['STEPS'][run], run_cond,  pipeline_id))
                                self.pipeline_runs[pipeline_id][run]['model_params'][2] = run_cond 
@@ -388,7 +407,7 @@ class DynamicControls():
                          message = socket.recv()
                          #print("Received ack msg : ", message)
                          sys.stdout.flush()
-                time.sleep(2) 
+                time.sleep(0.5) 
             except Exception as e:
                  print("Sender : Got an exception ", e)  
  

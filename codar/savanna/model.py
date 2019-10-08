@@ -86,7 +86,7 @@ class Run(threading.Thread):
         self.nprocs = nprocs
         self.monitor = {}
         self._deliberatily_killed = False
-        self.grace_kill = False
+        self.grace_kill = True
         # res_set, nrs, and rs_per_host represent resource_set definition,
         # total no. of resource sets, and the no. of resource sets per host
         # respectively. Reqd for Summit.
@@ -729,6 +729,7 @@ class Pipeline(object):
             with open(rmap_file, 'w') as fp:
                 json.dump(rmap_json, fp)
             rmonitor.args = args
+            rmonitor.grace_kill = False
             rmonitor.start()
             if rmonitor.sleep_after:
                 time.sleep(rmonitor.sleep_after)
