@@ -924,7 +924,7 @@ class Pipeline(object):
 
     def stop_run_get_cres(self, runs, run_params = None):
          cpus = []
-         gpus = []
+         gpus = [[],[]]
          for run_name in runs:
              for run in self._active_runs:
                  if run.name == run_name:
@@ -962,7 +962,7 @@ class Pipeline(object):
                          for i in range(run.node_config.num_ranks_per_node):
                              cpus.extend(run.node_config.cpu[i]) 
                          for i in range(len(run.node_config.gpu)):
-                             gpus.extend(run.node_config.cpu[i]) 
+                             gpus.extend(run.node_config.gpu[i]) 
                          DynamicUtil.log_dynamic.info("Freed resources cpus {} gpus {} pipeline {} at iteration {}".format(cpus, gpus, self.id, self._num_restart + 1))
                      break
          return cpus, gpus  
@@ -1064,10 +1064,15 @@ class Pipeline(object):
                                run.log_prefix, run.sleep_after, depends_on, run.hostfile,
                                run.runner_override )
 
+                 print("command = ", command, flush=True)
+
                  if command == "add":
                      if new_run.tasks_per_node is not None:
                          new_run.tasks_per_node += cpu_nodes
                          new_run.nprocs = run.nodes * new_run.tasks_per_node
+                     elif run.node_config is not None:
+                         new_run.nprocs = run.nodes * (len(run.node_config.cpu) + cpu_nodes)
+                         new_run.tasks_per_node =len(run.node_config.cpu) + cpu_nodes
                      else: 
                          new_run.nprocs += cpu_nodes
                  
@@ -1075,17 +1080,41 @@ class Pipeline(object):
                      if new_run.tasks_per_node is not None:
                          new_run.tasks_per_node -= cpu_nodes
                          new_run.nprocs = run.nodes * new_run.tasks_per_node
+                     elif run.node_config is not None:
+                         new_run.nprocs = run.nodes * (len(run.node_config.cpu) - cpu_nodes)
+                         new_run.tasks_per_node =len(run.node_config.cpu) - cpu_nodes
                      else: 
                          new_run.nprocs -= cpu_nodes
+                 elif command == "re-assign":
+                     new_run.tasks_per_node = cpu_nodes
+                     new_run.nprocs = run.nodes * new_run.tasks_per_node
                  else:
-                     new_run.tasks_per_node = run.tasks_per_node 
+                     new_run.tasks_per_node = len(run.node_config.cpu)
                      new_run.nprocs = run.nprocs
+                 if new_run.nprocs <= 0:
+                     return
 
+                 print("new_run.nprocs = ", new_run.nprocs, " new_run.tasks_per_node = ", new_run.tasks_per_node, " node_config ", run.node_config,  flush = True)
+                 new_run.nodes = run.nodes
+                 new_run.node_config = run.node_config
+                 cpu_nodes = None
                  if run.node_config is not None:
-                     cpu_nodes =  new_run.tasks_per_node
-                     gpu_nodes = len(run.node_config.gpu) 
+                     if new_run.tasks_per_node is not None:
+                         cpu_nodes =  new_run.tasks_per_node
+                     else:
+                         cpu_nodes =  1
+                     gpu_nodes = None #len(run.node_config.gpu) 
+                     new_run.nodes_assigned = run.nodes_assigned
+                     print("run.node_config.gpu = ", run.node_config.gpu, " cpu_nodes ", cpu_nodes, " gpu_nodes ", gpu_nodes, " nnodes ", run.nodes, " nodes_assigned ", run.nodes_assigned,  flush = True)
                      self.set_dynamic_node_config(new_run, cpu_nodes, cpus, gpu_nodes, gpus)
-
+                     if cpu_nodes < len(cpus):
+                         cpus = cpus[cpu_nodes:]
+                     else:  
+                         cpus = []
+                     if gpu_nodes is not None and gpu_nodes < len(cpus):
+                         gpus = gpus[gpu_nodes:]
+                     else:  
+                         gpus = [[],[]]
                  with self._state_lock:
                      new_run.log_prefix = "%s:%s" % (self.id, new_run.name)                    
                      new_run.set_runner(run.runner)
@@ -1113,12 +1142,14 @@ class Pipeline(object):
     def set_dynamic_node_config(self, new_run, cpu_node, cpus, gpu_node, gpus):
         new_run.node_config = NodeConfig()
         new_run.node_config.num_ranks_per_node = new_run.tasks_per_node
-        for i in range(cpu_node):
-            new_run.node_config.cpu.append([])
-            new_run.node_config.cpu[i].append(cpus[i])
-        for i in range(gpu_node):
-            new_run.node_config.gpu.append([])
-            new_run.node_config.gpu[i].append(gpu[i])
+        if cpu_node is not None: 
+            for i in range(cpu_node):
+                new_run.node_config.cpu.append([])
+                new_run.node_config.cpu[i].append(cpus[i])
+        if gpu_node is not None: 
+            for i in range(gpu_node):
+                new_run.node_config.gpu.append([])
+                new_run.node_config.gpu[i].append(gpus[i])
 
  
     def _rearrange_codes_by_dependencies(self, nl):

@@ -117,7 +117,7 @@ class PipelineRunner(object):
                 if pipeline.id == pipeline_id:
                     print("Looking for runs ..", run_names)
                     run_names1, total_per_node, cpus, gpus =  pipeline.get_active_config(run_names, all)
-        return total_per_node, cpus, gpus
+        return total_per_node, cpus, gpus, run_names1
 
     def get_pipeline_nrestart(self, pipeline_id):
         with self.pipelines_lock:

@@ -65,7 +65,8 @@ def _create_erf_file_node_config(erf_file_path, run_exe, run_args,
                                  node_config):
     str = _get_first_erf_block(run_exe, run_args)
     erf_map = _ERFMap(node_config).map
-
+    
+    print("nodes_req =", num_nodes_reqd, "nodes_assigned = ", nodes_assigned, flush=True)
     for i in range(num_nodes_reqd):
         next_host = nodes_assigned[i]
         rank_offset = i*len(list(erf_map.keys()))
