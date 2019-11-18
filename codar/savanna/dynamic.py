@@ -260,6 +260,8 @@ class DynamicControls():
                        if n_map['N_STEPS'][run] == self.pipeline_runs[pipeline_id][run]['last_killed'] or n_map['N_STEPS'][run] == 0: 
                            continue
                        for parents in dag_parent[run].keys():
+                          done_run = 0
+                       """ 
                             if do_change and n_map['N_STEPS'][run] < n_map['N_STEPS'][parents] - 10:
                                 print("Adding run ",run , " to inc set") 
                                 runs_names_inc.append(run)
@@ -268,6 +270,7 @@ class DynamicControls():
                                 done_run = 1
                                 #self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
                                 break
+                       """
                        if done_run == 1:
                            continue
                        elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] >= 2 * expected_steptime and n_map['N_STEPS'][run] < n_map['N_STEPS'][parents]:
@@ -419,7 +422,8 @@ class DynamicControls():
     def _sender(self):   
         keep_requesting = True 
         stop = False
-        time.sleep(120) 
+        time.sleep(300) 
+
         print("Sender: Starting....", flush = True) 
         while keep_requesting == True:
             #check if there is a stop request :: ....
