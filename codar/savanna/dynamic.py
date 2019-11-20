@@ -286,7 +286,8 @@ class DynamicControls():
                            new_per_node -= 1
                            #self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
                        
-               run_names = runs_names_inc
+               run_names = []
+               run_names.extend(runs_names_inc)
                run_names.extend(runs_names_dec)    
                if len(run_names) > 0:
                    dep_runs = []
@@ -326,16 +327,15 @@ class DynamicControls():
                        break   
                    for vic_name in vic_names:
                        if vic_name in runs_names_inc:
-                           new_per_node -= 1
                            if len(cpus) == new_per_node - 1:
                                x_per_node, m_cpus, m_gpus, rns = self.consumer.get_active_cres(pipeline_id, [vic_name], all=0)                           
                                cpus = [x for x in cpus if x not in m_cpus]
-                               new_per_node -= len(m_cpus)
                            else:
                                print("Stopping the pipeline : ", pipeline_id, " run(victim)  : ", vic_name, "  Timestamp : ", time.time())
                                m_cpus, m_gpus = self.consumer.stop_pipeline_runs(pipeline_id, [vic_name])
                                print("Stopped the pipeline : ", pipeline_id, " run(victim)  : ", vic_name, "  Timestamp : ", time.time(), "CPUS" ,  m_cpus, "GPUS", m_gpus)
-                               new_per_node -= len(m_cpus)
+                           new_per_node -= len(m_cpus)
+                           new_per_node -= 1
                            run_names.remove(vic_name)
                        elif vic_name in runs_names_dec:
                            new_per_node += 1
@@ -349,9 +349,11 @@ class DynamicControls():
                            print("Stopping the pipeline : ", pipeline_id, " run(victim)  : ", vic_name, "  Timestamp : ", time.time())
                            m_cpus, m_gpus = self.consumer.stop_pipeline_runs(pipeline_id, [vic_name])                                    
                            print("Stopped the pipeline : ", pipeline_id, " run(victim)  : ", vic_name, "  Timestamp : ", time.time(), "CPUS" ,  m_cpus, "GPUS", m_gpus)
-                           cpus.extend(m_cpus) 
-                           gpus.extend(m_gpus)
-
+                           if vic_name not in run_names:
+                               cpus.extend(m_cpus) 
+                               gpus.extend(m_gpus)
+                           else:
+                               run_names.remove(vic_name)
                        self.pipeline_runs[pipeline_id][vic_name]['model_params'][3] = 0
                        x = len(cpus)
                        r_names.append(vic_name)
