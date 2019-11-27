@@ -86,6 +86,7 @@ class Run(threading.Thread):
         self.nprocs = nprocs
         self.monitor = {}
         self._deliberatily_killed = False
+        self.hold = False
         self.grace_kill = True
         # res_set, nrs, and rs_per_host represent resource_set definition,
         # total no. of resource sets, and the no. of resource sets per host
@@ -374,7 +375,7 @@ class Run(threading.Thread):
 
         if self._p is not None:
             _log.warning('%s kill requested', self.log_prefix)
-            if self.grace_kill == True:
+            if self.grace_kill == True: 
                 self._kill_thread = threading.Thread(target=self._grace_kill)
             else:
                 self._kill_thread = threading.Thread(target=self._term_kill)
@@ -406,6 +407,7 @@ class Run(threading.Thread):
         self._p.wait()
         self._pgroup_wait()
         os.remove(kill_file)
+        #self.hold = True
 
     def _pgroup_wait(self):
         """Wait until the process group lead by this run no longer exists.
@@ -713,7 +715,8 @@ class Pipeline(object):
             if run.name == 'rmonitor':
                 rmonitor = run
                 continue
-
+            if run.hold == True:
+                continue 
             run.start()
             if run.sleep_after:
                 time.sleep(run.sleep_after)
@@ -966,7 +969,16 @@ class Pipeline(object):
                          DynamicUtil.log_dynamic.info("Freed resources cpus {} gpus {} pipeline {} at iteration {}".format(cpus, gpus, self.id, self._num_restart + 1))
                      break
          return cpus, gpus  
-    
+   
+    def get_inactive(self):
+        #inact_list = [x for x in self.runs if x not in self._active_runs]
+        #print("All runs ", self.runs, " active runs ", self._active_runs, " inactive ", inact_list) 
+        inactive_runs =[]
+        for r in self.runs:
+            if r.hold == True:
+                inactive_runs.append(r.name)
+        return inactive_runs
+  
     def get_active_config(self, run_names, all=1):
          run_out_names = []
          total_per_node = 0
@@ -979,11 +991,14 @@ class Pipeline(object):
               run_out_names.append(run.name)
  
               if run.node_config is None:
+                  print("Node config is None for ", run.name)
                   if run.tasks_per_node is None:
+                      print("Tasks per node is None for ", run.name)
                       total_per_node += run.nprocs
                   else:
                       total_per_node +=  run.tasks_per_node
               else:
+                  print("Node config is not None for ", run.name, " num ranks per node", run.node_config.num_ranks_per_node)
                   total_per_node += run.node_config.num_ranks_per_node
                   for i in range(run.node_config.num_ranks_per_node):
                       cpus.extend(run.node_config.cpu[i]) 
@@ -1031,7 +1046,7 @@ class Pipeline(object):
             found = 0
             for run in self._active_runs:
                 if run.name == run_name: 
-                    if run.wait_for_kill() == True:
+                    if run.wait_for_kill() == True or run.hold == True:
                         print("Found the run ", run.name , " in run name..")
                         found = 1
                         break
@@ -1087,7 +1102,13 @@ class Pipeline(object):
                          new_run.nprocs -= cpu_nodes
                  elif command == "re-assign":
                      new_run.tasks_per_node = cpu_nodes
-                     new_run.nprocs = run.nodes * new_run.tasks_per_node
+                     if run.hold == True:  
+                         new_run.nprocs = (self.get_nodes_used() - 1) * new_run.tasks_per_node
+                         run.nodes = (self.get_nodes_used() - 1)
+                         new_run.hold = False
+                     else:
+                         new_run.nprocs = run.nodes * new_run.tasks_per_node
+                     
                  else:
                      new_run.tasks_per_node = len(run.node_config.cpu)
                      new_run.nprocs = run.nprocs
@@ -1121,6 +1142,9 @@ class Pipeline(object):
                      self.runs.append(new_run)	
                      new_run.machine = run.machine
                      new_run.callbacks = run.callbacks
+                     if run.hold == True:
+                         self._active_runs.remove(run) 
+                         run.hold = False
                      self.runs.remove(run)	
                      if new_run.tasks_per_node is not None:
                          new_run.nodes = int(math.ceil(new_run.nprocs / new_run.tasks_per_node))

@@ -109,6 +109,15 @@ class PipelineRunner(object):
         with self.job_list_cv:
             self.job_list_cv.notify()
 
+    def get_inactive(self, pipeline_id):
+        run_names = []
+        with self.pipelines_lock:
+            for pipeline in list(self._running_pipelines):
+                print("Looking pipeline ...", pipeline_id )
+                if pipeline.id == pipeline_id:
+                    run_names =  pipeline.get_inactive()
+        return run_names
+ 
 
     def get_active_cres(self, pipeline_id, run_names, all=1):
         with self.pipelines_lock:
@@ -129,7 +138,6 @@ class PipelineRunner(object):
         with self.pipelines_lock:
             for pipeline in list(self._running_pipelines):
                 if pipeline.id == pipeline_id:
-                    
                     return pipeline.stop_run_get_cres(run_names, run_params)
 
     def stop_pipeline_all(self, pipeline_id):

@@ -276,15 +276,18 @@ class DynamicControls():
                        elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] >= 2 * expected_steptime and n_map['N_STEPS'][run] < n_map['N_STEPS'][parents]:
                            print("Adding run ",run , " to inc set") 
                            runs_names_inc.append(run)
-                           runs_params[run] = {'cpus_node':'1', 'command':'add'}
-                           new_per_node += 1
+                           runs_params[run] = {'cpus_node':'2', 'command':'add'}
+                           new_per_node += 2
                            #self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
-                       elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] < 0.5 * expected_steptime and n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] and n_map['AVG_STEP_TIME'][run] < 0.5* n_map['AVG_STEP_TIME'][parents]:
-                           print("Adding run ", run , " to dec set") 
-                           runs_names_dec.append(run)
-                           runs_params[run] = {'cpus_node':'1', 'command':'del'}
-                           new_per_node -= 1
-                           #self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
+                       elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] < 0.5 * expected_steptime and (n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] or n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] -1 ):
+                           n_per_node, m_cpus, m_gpus, rns = self.consumer.get_active_cres(pipeline_id, [run], 0) 
+                           print ("run name ", run, " npernode ", n_per_node, flush = True)
+                           if n_per_node > 2:
+                               print("Adding run ", run , " to dec set") 
+                               runs_names_dec.append(run)
+                               runs_params[run] = {'cpus_node':'2', 'command':'del'}
+                               new_per_node -= 2
+                               #self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
                        
                run_names = []
                run_names.extend(runs_names_inc)
@@ -313,7 +316,19 @@ class DynamicControls():
 
                r_names = []
                r_names.extend(run_names)
+               runs_names_hold = [] 
                print("Run names before ", run_names, flush = True)  
+               if self.machine != 'local' and len(cpus) > new_per_node:
+                   rnames = self.consumer.get_inactive(pipeline_id)
+                   print("Inactive run names ", rnames, flush = True)  
+                   if len(rnames) != 0:
+                       r = rnames[0]
+                       runs_names_hold.append(r)  
+                       #run_names.append(r)
+                       res = len(cpus) - new_per_node
+                       runs_params[rnames[0]] = {'cpus_node':res, 'command':'re-assign'}
+                       new_per_node += res
+
                priority = 10000
                while self.machine != 'local' and len(cpus) < new_per_node:
                    vic_names, prior_runs, priority = self.find_victim(pipeline_id, r_names, priority)
@@ -327,7 +342,7 @@ class DynamicControls():
                        break   
                    for vic_name in vic_names:
                        if vic_name in runs_names_inc:
-                           if len(cpus) == new_per_node - 1:
+                           if len(cpus) == new_per_node - 2:
                                x_per_node, m_cpus, m_gpus, rns = self.consumer.get_active_cres(pipeline_id, [vic_name], all=0)                           
                                cpus = [x for x in cpus if x not in m_cpus]
                            else:
@@ -335,10 +350,10 @@ class DynamicControls():
                                m_cpus, m_gpus = self.consumer.stop_pipeline_runs(pipeline_id, [vic_name])
                                print("Stopped the pipeline : ", pipeline_id, " run(victim)  : ", vic_name, "  Timestamp : ", time.time(), "CPUS" ,  m_cpus, "GPUS", m_gpus)
                            new_per_node -= len(m_cpus)
-                           new_per_node -= 1
+                           new_per_node -= 2
                            run_names.remove(vic_name)
                        elif vic_name in runs_names_dec:
-                           new_per_node += 1
+                           new_per_node += 2
                            print("Stopping the pipeline : ", pipeline_id, " run(victim)  : ", vic_name, "  Timestamp : ", time.time())
 
                            m_cpus, m_gpus = self.consumer.stop_pipeline_runs(pipeline_id, [vic_name])
@@ -354,7 +369,7 @@ class DynamicControls():
                                gpus.extend(m_gpus)
                            else:
                                run_names.remove(vic_name)
-                       self.pipeline_runs[pipeline_id][vic_name]['model_params'][3] = 0
+                       #self.pipeline_runs[pipeline_id][vic_name]['model_params'][3] = 0
                        x = len(cpus)
                        r_names.append(vic_name)
                        if len(cpus) >  new_per_node:
@@ -368,13 +383,14 @@ class DynamicControls():
                    print("Run names  : ", run_names, " CPUS ", len(cpus), " N_PER_NODE ", n_per_node, " REQUIRED ", new_per_node)
                    print("Stopping and restarting the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", runs_params, "  Timestamp : ", time.time())
                    self.consumer.stop_pipeline_runs(pipeline_id, run_names)                                    
+                   run_names.extend(runs_names_hold)
                    self.consumer.restart_pipeline_runs(pipeline_id, run_names, runs_params, cpus, gpus)    
                    print("Stopped and restarted the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", runs_params, "  Timestamp : ", time.time())
                    for runs_x in run_names:
                        print("Run name  : ", runs_x, " Last killed updated to ", n_map['N_STEPS'][runs_x])
                        self.pipeline_runs[pipeline_id][runs_x]['last_killed'] =  n_map['N_STEPS'][runs_x]
                    refresh = True
-                   time.sleep(60)  
+                   time.sleep(30)  
                self.timestamp[pipeline_id] = datetime.datetime.now()
         if dereg == True:
             self._deregister_pipeline(pipeline_id)
@@ -424,7 +440,7 @@ class DynamicControls():
     def _sender(self):   
         keep_requesting = True 
         stop = False
-        time.sleep(300) 
+        time.sleep(120) 
 
         print("Sender: Starting....", flush = True) 
         while keep_requesting == True:
@@ -548,6 +564,7 @@ class DynamicControls():
             stream_file = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_STREAM", "None")
             params = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_MPARAMS", "")
             workflow_model = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_MODEL", "outsteps2")
+            hold_job = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_HOLD", "0")
             priority = int(DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_PRIORITY", "1"))
             if workflow_model == "memory":
                 metric = DynamicUtil.get_env(run.env, "TAU_METRICS", "")
@@ -563,6 +580,9 @@ class DynamicControls():
                 run.monitor['model_params'] = params.split(',')
                 run.monitor['last_killed'] = 0
                 print(params) 
+
+            if int(hold_job) == 1:
+                run.hold = True
 
             run.grace_kill = True 
 

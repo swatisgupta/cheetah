@@ -35,6 +35,10 @@ class DynamicUtil():
        rfile_json['node']=[]
        nodes_assigned = pipeline.get_assigned_nodes()
        index = 0
+       for run in pipeline.runs:
+           if run.hold == True:
+               run.nodes_assigned = []
+               run.nprocs = 0
        for asgn_node in nodes_assigned:
            print("Assigned node ", asgn_node)
            node = {}
@@ -47,6 +51,9 @@ class DynamicUtil():
                run_map = {}
                print("Run name", run.name,  run.tasks_per_node, run.nodes_assigned)
                n_ranks_per_node = 0
+               if run.hold == True and asgn_node not in run.nodes_assigned:
+                   run.nodes_assigned.append(asgn_node)
+                   run.nprocs += 1
                if run.nodes_assigned is None:
                    n_ranks_per_node = run.tasks_per_node
                    print("Run name", run.name,  run.tasks_per_node)
