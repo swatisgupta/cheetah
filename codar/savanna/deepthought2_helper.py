@@ -62,7 +62,7 @@ def _create_rankfile_node_config(rankfile_path, nprocs, num_nodes_reqd,
                     map[int(core_id/10)] = []
                     k += 1 
                 map[int(core_id/10)].append(core_id % 10)
-            print("rankfile ", map)
+            #print("rankfile ", map)
             lines += "slot = "
             for key in map.keys():    
                 if len(map[key]) == 1:
@@ -78,7 +78,7 @@ def _create_rankfile_node_config(rankfile_path, nprocs, num_nodes_reqd,
             if j+rank_offset == nprocs-1:
                 break
 
-    print("rankfile ::: ", lines)
+    #print("rankfile ::: ", lines)
 
     with open(rankfile_path, 'w') as f:
         f.write(lines)

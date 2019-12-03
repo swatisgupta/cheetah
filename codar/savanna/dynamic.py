@@ -203,7 +203,7 @@ class DynamicControls():
                                run_cond = run_cond - int(math.log2(run_cond))
                            elif step_fn == 'log':                    
                                run_cond = run_cond - int(math.log(run_cond))
-                           print("run condition for run ", run, " is ", run_cond, " step function is ", step_fn,  flush = True)   
+                           #print("run condition for run ", run, " is ", run_cond, " step function is ", step_fn,  flush = True)   
                            if niter % ch_iter == 0 and last_killed < niter and n_map['STEPS'][run] >= run_cond and n_map['STEPS'][run] < max_iter and r_steps > (ch_iter-1) * max_iter * 2:
                                run_names.append(run)
                                DynamicUtil.log_dynamic.info("Total steps completed {}, steps completed by run {} at iteration {} are {} >= {} for pipeline {}".format(r_steps, run, niter, n_map['STEPS'][run], run_cond,  pipeline_id))
@@ -238,7 +238,7 @@ class DynamicControls():
                
                if pipeline_id not in self.active_pipelines: 
                    return refresh
-               print("Got a message for ", pipeline_id , "with timestamp" , dateutil.parser.parse(timestamp) ," and the last timestamp was ", self.timestamp[pipeline_id], flush = True)
+               #print("Got a message for ", pipeline_id , "with timestamp" , dateutil.parser.parse(timestamp) ," and the last timestamp was ", self.timestamp[pipeline_id], flush = True)
                if self.timestamp[pipeline_id] > dateutil.parser.parse(timestamp): # , '%y-%m-%d %H:%M:%S.%f'):
                    return refresh
 
@@ -281,7 +281,7 @@ class DynamicControls():
                            #self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
                        elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] < 0.5 * expected_steptime and (n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] or n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] -1 ):
                            n_per_node, m_cpus, m_gpus, rns = self.consumer.get_active_cres(pipeline_id, [run], 0) 
-                           print ("run name ", run, " npernode ", n_per_node, flush = True)
+                           #print ("run name ", run, " npernode ", n_per_node, flush = True)
                            if n_per_node > 2:
                                print("Adding run ", run , " to dec set") 
                                runs_names_dec.append(run)
@@ -312,15 +312,15 @@ class DynamicControls():
                        cpus = [i for i in  cpus + t_cpus if i not in cpus and i not in t_cpus]  
                        cpus.extend(m_cpus)
                    gpus = m_gpus
-                   print("CPUS...", cpus, " Total CPUS..", t_cpus, " NEW_PER_NODE...", new_per_node, flush = True )
+                   #print("CPUS...", cpus, " Total CPUS..", t_cpus, " NEW_PER_NODE...", new_per_node, flush = True )
 
                r_names = []
                r_names.extend(run_names)
                runs_names_hold = [] 
-               print("Run names before ", run_names, flush = True)  
+               #print("Run names before ", run_names, flush = True)  
                if self.machine != 'local' and len(cpus) > new_per_node:
                    rnames = self.consumer.get_inactive(pipeline_id)
-                   print("Inactive run names ", rnames, flush = True)  
+                   #print("Inactive run names ", rnames, flush = True)  
                    if len(rnames) != 0:
                        r = rnames[0]
                        runs_names_hold.append(r)  
@@ -377,10 +377,10 @@ class DynamicControls():
                            res = len(cpus) - new_per_node
                            runs_params[vic_name] = {'cpus_node':res, 'command':'re-assign'} 
                            break
-                   print("CPUS...", cpus," : ", len(cpus), " NEW_PER_NODE...", new_per_node, flush = True )
+                   #print("CPUS...", cpus," : ", len(cpus), " NEW_PER_NODE...", new_per_node, flush = True )
 
                if len(run_names) > 0 and ((self.machine == 'local' and len(cpus) - n_per_node >= new_per_node) or len(cpus) >= new_per_node):
-                   print("Run names  : ", run_names, " CPUS ", len(cpus), " N_PER_NODE ", n_per_node, " REQUIRED ", new_per_node)
+                   #print("Run names  : ", run_names, " CPUS ", len(cpus), " N_PER_NODE ", n_per_node, " REQUIRED ", new_per_node)
                    print("Stopping and restarting the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", runs_params, "  Timestamp : ", time.time())
                    self.consumer.stop_pipeline_runs(pipeline_id, run_names)                                    
                    run_names.extend(runs_names_hold)
@@ -400,18 +400,18 @@ class DynamicControls():
     def find_victim(self, pipeline_id, r_names, pr):
         priority = self.pipeline_priority[pipeline_id]
         order_runs = [] 
-        print("Getting a victim to kill...", priority) 
+        #print("Getting a victim to kill...", priority) 
         n_p = len(priority.keys())
         sorted_keys = sorted(priority.keys(), reverse=True) 
         no_victim = 0
-        print("Sorted keys are...", sorted_keys)
+        #print("Sorted keys are...", sorted_keys)
         pr1 = pr
         for p in sorted_keys:
             if p >= pr:
                 continue
             pr1 = p
             runs = priority[p]
-            print("Looking for runs...", runs)
+            #print("Looking for runs...", runs)
             found = 1 
             for run in  r_names:
                 if run in runs:
@@ -420,11 +420,11 @@ class DynamicControls():
                     no_victim = 1
                     break
             if found == 1:
-                print("return values", runs, order_runs, pr1, flush = True) 
+                #print("return values", runs, order_runs, pr1, flush = True) 
                 return runs, order_runs, pr1
             if no_victim == 1:
                 break
-        print("return values", [], order_runs, pr1, flush = True) 
+        #print("return values", [], order_runs, pr1, flush = True) 
         return [], order_runs, pr1
 
     def get_machine_cpu(self):
@@ -442,14 +442,14 @@ class DynamicControls():
         stop = False
         time.sleep(120) 
 
-        print("Sender: Starting....", flush = True) 
+        #print("Sender: Starting....", flush = True) 
         while keep_requesting == True:
             #check if there is a stop request :: ....
             try:
                 with self.send_cond:
                     if self.stop_send == True:
                         keep_requesting == False 
-                        print("Sender: Signing off...")
+                        #print("Sender: Signing off...")
                         continue
 
                 
@@ -537,7 +537,7 @@ class DynamicControls():
         workflow_restart = int(os.environ.get("SAVANNA_RESTART_PIPELINE", 0))
         workflow_restart_steps = -1
         if workflow_restart != 0:
-            print("Setting restart")
+            #print("Setting restart")
             pipeline.restart = True
             workflow_restart_steps = int(os.environ.get("SAVANNA_RESTART_STEPS", 0))
         pipeline_dag1, pipeline_dag2 = DynamicUtil.generate_dag(workflow_dagfile, pipeline.working_dir)
@@ -579,7 +579,7 @@ class DynamicControls():
                 run.monitor['stream_nm'] = stream_file 
                 run.monitor['model_params'] = params.split(',')
                 run.monitor['last_killed'] = 0
-                print(params) 
+                #print(params) 
 
             if int(hold_job) == 1:
                 run.hold = True
@@ -605,7 +605,7 @@ class DynamicControls():
             if run.args is not None:
                 args = run.args
             self.cur_oport += 2
-            print("Original args : ", args)        
+            #print("Original args : ", args)        
             index = DynamicUtil.get_index(args, "--bind_inport")
             if index != -1:
                 args[index+1] = str(self.cur_oport)

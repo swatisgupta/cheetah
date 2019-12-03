@@ -276,7 +276,7 @@ class Run(threading.Thread):
             summit_helper.create_erf_file(self)
 
         if 'deepthought2_cpu' in self.machine.name.lower():
-            print("creating rankfile")
+            #print("creating rankfile")
             if self.node_config is not None:
                 self.dth_rankfile = self.working_dir + '/' + self.name + \
                                     ".rankfile"
@@ -728,7 +728,7 @@ class Pipeline(object):
             args = rmonitor.args
             args.append('--rmap_file')
             args.append(rmap_file)
-            print(rmap_json)
+            #print(rmap_json)
             with open(rmap_file, 'w') as fp:
                 json.dump(rmap_json, fp)
             rmonitor.args = args
@@ -935,7 +935,7 @@ class Pipeline(object):
                      steps = [] 
                      if run_params is not None and run_name in run_params.keys():
                          r_p = run_params[run_name]
-                         print("Found run ", run.name, " with run_params", r_p, flush = True)
+                         #print("Found run ", run.name, " with run_params", r_p, flush = True)
                      DynamicUtil.log_dynamic.info("Kill requested component {} of pipeline {} at iteration {}".format(run_name, self.id, self._num_restart + 1))
                      run._deliberatily_killed = True
                      run.kill()
@@ -991,14 +991,14 @@ class Pipeline(object):
               run_out_names.append(run.name)
  
               if run.node_config is None:
-                  print("Node config is None for ", run.name)
+                  #print("Node config is None for ", run.name)
                   if run.tasks_per_node is None:
-                      print("Tasks per node is None for ", run.name)
+                      #print("Tasks per node is None for ", run.name)
                       total_per_node += run.nprocs
                   else:
                       total_per_node +=  run.tasks_per_node
               else:
-                  print("Node config is not None for ", run.name, " num ranks per node", run.node_config.num_ranks_per_node)
+                  #print("Node config is not None for ", run.name, " num ranks per node", run.node_config.num_ranks_per_node)
                   total_per_node += run.node_config.num_ranks_per_node
                   for i in range(run.node_config.num_ranks_per_node):
                       cpus.extend(run.node_config.cpu[i]) 
@@ -1017,7 +1017,7 @@ class Pipeline(object):
 
     
     def restart_runs(self, runs, runs_params, cpus, gpus):
-        print("Inside force restart...restarting ", runs , "\n")
+        #print("Inside force restart...restarting ", runs , "\n")
         for run_name in runs:
             new_args = "" 
             cpu_nodes = 0
@@ -1039,7 +1039,7 @@ class Pipeline(object):
                 if "command" in params.keys():
                     command = params["command"]
 
-                print("Command ...", command, flush = True ) 
+                #print("Command ...", command, flush = True ) 
 
             new_procs = 0
             run = None
@@ -1047,7 +1047,7 @@ class Pipeline(object):
             for run in self._active_runs:
                 if run.name == run_name: 
                     if run.wait_for_kill() == True or run.hold == True:
-                        print("Found the run ", run.name , " in run name..")
+                        #print("Found the run ", run.name , " in run name..")
                         found = 1
                         break
                     else: 
@@ -1056,7 +1056,7 @@ class Pipeline(object):
  
             for run in self.runs:
                  if run.name == run_name:
-                     print("Found the run ", run.name , " in run name..")
+                     #print("Found the run ", run.name , " in run name..")
                      found = 1
                      break  
 
@@ -1079,7 +1079,7 @@ class Pipeline(object):
                                run.log_prefix, run.sleep_after, depends_on, run.hostfile,
                                run.runner_override )
 
-                 print("command = ", command, flush=True)
+                 #print("command = ", command, flush=True)
 
                  if command == "add":
                      if new_run.tasks_per_node is not None:
@@ -1115,7 +1115,7 @@ class Pipeline(object):
                  if new_run.nprocs <= 0:
                      return
 
-                 print("new_run.nprocs = ", new_run.nprocs, " new_run.tasks_per_node = ", new_run.tasks_per_node, " node_config ", run.node_config,  flush = True)
+                 #print("new_run.nprocs = ", new_run.nprocs, " new_run.tasks_per_node = ", new_run.tasks_per_node, " node_config ", run.node_config,  flush = True)
                  new_run.nodes = run.nodes
                  new_run.node_config = run.node_config
                  cpu_nodes = None
@@ -1126,7 +1126,7 @@ class Pipeline(object):
                          cpu_nodes =  1
                      gpu_nodes = None #len(run.node_config.gpu) 
                      new_run.nodes_assigned = run.nodes_assigned
-                     print("run.node_config.gpu = ", run.node_config.gpu, " cpu_nodes ", cpu_nodes, " gpu_nodes ", gpu_nodes, " nnodes ", run.nodes, " nodes_assigned ", run.nodes_assigned,  flush = True)
+                     #print("run.node_config.gpu = ", run.node_config.gpu, " cpu_nodes ", cpu_nodes, " gpu_nodes ", gpu_nodes, " nnodes ", run.nodes, " nodes_assigned ", run.nodes_assigned,  flush = True)
                      self.set_dynamic_node_config(new_run, cpu_nodes, cpus, gpu_nodes, gpus)
                      if cpu_nodes < len(cpus):
                          cpus = cpus[cpu_nodes:]
@@ -1222,7 +1222,7 @@ class Pipeline(object):
             self._active_runs.remove(run)
             if len(self._active_runs) == 1:
                 rn = list(self._active_runs)[0]
-                print("Last active run is ", rn.name) 
+                #print("Last active run is ", rn.name) 
                 if self.restart == False and rn.name == 'rmonitor':
                     rn.kill()
                 elif self.restart == True:
