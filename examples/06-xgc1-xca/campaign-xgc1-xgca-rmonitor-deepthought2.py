@@ -79,6 +79,7 @@ class XGC1XCA(Campaign):
             p.ParamKeyValue     ('xgc1', 'step_freq', 'XGC1_exec/input', 'sml_restart_write_period', [2]),
             p.ParamKeyValue     ('xgc1', '1d_diag', 'XGC1_exec/input', 'diag_1d_period', [1]),
             p.ParamKeyValue     ('xgc1', 'num_particles', 'XGC1_exec/input', 'ptl_num', [t_particles]),
+            p.ParamKeyValue     ('xgc1', 'sml_monte_num', 'XGC1_exec/input', 'sm_monte__num', [100*t_particles]),
             p.ParamKeyValue     ('xgc1', 'max_particles', 'XGC1_exec/input', 'ptl_maxnum', [5000000]),
 
             # Sweep over four values for the nprocs 
@@ -98,6 +99,7 @@ class XGC1XCA(Campaign):
             p.ParamKeyValue     ('xgca', '1d_diag', 'XGCa_exec/input', 'diag_1d_period', [1]),
             p.ParamKeyValue     ('xgca', 'num_particles', 'XGCa_exec/input', 'ptl_num', [t_particles]),
             p.ParamKeyValue     ('xgca', 'max_particles', 'XGCa_exec/input', 'ptl_maxnum', [5000000]),
+            p.ParamKeyValue     ('xgca', 'sml_monte_num', 'XGC1_exec/input', 'sm_monte__num', [100*t_particles]),
 
             p.ParamRunner       ('rmonitor', 'nprocs', [1]),
             p.ParamRunner       ('restart1', 'nprocs', [1]),

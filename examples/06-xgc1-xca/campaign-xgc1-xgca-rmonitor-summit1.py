@@ -16,8 +16,7 @@ class XGC1XCA(Campaign):
     #   without a runner such as aprun/srun/jsrun etc.
     codes = [ ("xgc1", dict(exe="run-xgc1.sh", adios_xml_file='adios2cfg.xml', runner_override=False)),
               ("xgca", dict(exe="run-xgca.sh", adios_xml_file='adios2cfg.xml', runner_override=False)),
-              ("restart1", dict(exe="restart1.sh", runner_override=True)),
-              ("restart2", dict(exe="restart2.sh", runner_override=True)),
+              ("restart1", dict(exe="restart.sh", runner_override=True)),
               ("rmonitor", dict(exe="/gpfs/alpine/csc299/scratch/ssinghal/XGC1-XGCA-EXPS/Dynamic_workflow_management/rmonitor/bin/r_monitor", runner_override=True)),
             ]
  
@@ -42,11 +41,10 @@ class XGC1XCA(Campaign):
     # A way to setup your environment before the experiment runs. Export environment variables such as LD_LIBRARY_PATH here.
     app_config_scripts = {'summit':'setup-summit.sh'}
 
-    nprocs_per_node = 6
-    nthreads = 28
+    nprocs_per_node = 14
+    nthreads = 10
     nprocs = 192 
-    t_particles=250000 #250000 #For small scale run
-    t_particles1=25000 #250000 #For small scale run
+    t_particles=250000 #For small scale run
     #t_particles=100000 #For test run
     #t_particles = 100000 * nprocs * nthreads * 10 * 8 
 
@@ -69,11 +67,11 @@ class XGC1XCA(Campaign):
             p.ParamRunner       ('xgc1', 'nprocs', [nprocs]),
             p.ParamEnvVar       ('xgc1', 'openmp', 'OMP_NUM_THREADS', [nthreads]),
             p.ParamEnvVar       ('xgc1', 'savanna_model', 'SAVANNA_MONITOR_MODEL', ['outsetps2']),
-            p.ParamEnvVar       ('xgc1', 'savana_params', 'SAVANNA_MONITOR_MPARAMS', ["0, 2, 80, 5, .bp, input, sml_mstep, log2, 2, 100"]),
+            p.ParamEnvVar       ('xgc1', 'savana_params', 'SAVANNA_MONITOR_MPARAMS', ["0, 2, 100, 5, .bp, input, sml_mstep, fx, 2, 100"]),
             p.ParamEnvVar       ('xgc1', 'savana_stream', 'SAVANNA_MONITOR_STREAM', ['restart_dir/xgc.restart.']),
             p.ParamEnvVar       ('xgc1', 'savana_eng', 'SAVANNA_MONITOR_ENG', ['BPFile']),
             p.ParamKeyValue       ('xgc1', 'nphi', 'XGC1_exec/input', 'sml_nphi_total', [16]), #2 or nprocs/192
-            p.ParamKeyValue       ('xgc1', 'grid', 'XGC1_exec/input', 'sml_grid_nrho', [6]),  #2 or 6
+            p.ParamKeyValue       ('xgc1', 'grid', 'XGC1_exec/input', 'sml_grid_nrho', [2]),  #2 or 6
             p.ParamKeyValue       ('xgc1', 'inputdir', 'XGC1_exec/input', 'sml_input_file_dir', ["'XGC-1_inputs'"]),
             p.ParamKeyValue       ('xgc1', 'nsteps', 'XGC1_exec/input', 'sml_mstep', [100]),
             p.ParamKeyValue       ('xgc1', 'coupling1', 'XGC1_exec/input', 'sml_coupling_xgc1_dir', ["'../xgc1'"]), #2 or nprocs/192
@@ -83,21 +81,16 @@ class XGC1XCA(Campaign):
             p.ParamKeyValue       ('xgc1', '1d_diag', 'XGC1_exec/input', 'diag_1d_period', [1]),
             p.ParamKeyValue       ('xgc1', 'num_particles', 'XGC1_exec/input', 'ptl_num', [t_particles]),
             p.ParamKeyValue       ('xgc1', 'max_particles', 'XGC1_exec/input', 'ptl_maxnum', [5000000]),
-            p.ParamKeyValue       ('xgc1', 'deltaf', 'XGC1_exec/input', 'sml_deltaf', [".true."]),
-            p.ParamKeyValue       ('xgc1', 'iter_solver', 'XGC1_exec/input', 'sml_iter_solver', [".true."]),
-            p.ParamKeyValue       ('xgc1', 'coupling_rate', 'XGC1_exec/input', 'sml_coupling_sampling_rate', [0.1]),
 
-
-            #p.ParamKeyValue       ('xgc1', 'electron_on', 'XGC1_exec/input', 'sml_electron_on', [".true."]),  
             # Sweep over four values for the nprocs 
             p.ParamRunner       ('xgca', 'nprocs', [nprocs]),
             p.ParamEnvVar       ('xgca', 'openmp', 'OMP_NUM_THREADS', [nthreads]),
             p.ParamEnvVar       ('xgca', 'savanna_model', 'SAVANNA_MONITOR_MODEL', ['outsetps2']),
             p.ParamEnvVar       ('xgca', 'savana_stream', 'SAVANNA_MONITOR_STREAM', ['restart_dir/xgc.restart.']),
             p.ParamEnvVar       ('xgca', 'savana_eng', 'SAVANNA_MONITOR_ENG', ['BPFile']),
-            p.ParamEnvVar       ('xgca', 'savana_params', 'SAVANNA_MONITOR_MPARAMS', ["0, 2, 80, 5, .bp, input, sml_mstep, fx, log2, 100"]), 
+            p.ParamEnvVar       ('xgca', 'savana_params', 'SAVANNA_MONITOR_MPARAMS', ["0, 2, 80, 5, .bp, input, sml_mstep, log2, 2, 100"]), 
             p.ParamKeyValue       ('xgca', 'nphi', 'XGCa_exec/input', 'sml_nphi_total', [16]), #2 or nprocs/192
-            p.ParamKeyValue       ('xgca', 'grid', 'XGCa_exec/input', 'sml_grid_nrho', [6]),  #2 or 6
+            p.ParamKeyValue       ('xgca', 'grid', 'XGCa_exec/input', 'sml_grid_nrho', [2]),  #2 or 6
             p.ParamKeyValue       ('xgca', 'inputdir', 'XGCa_exec/input', 'sml_input_file_dir', ["'XGC-1_inputs'"]),
             p.ParamKeyValue       ('xgca', 'nsteps', 'XGCa_exec/input', 'sml_mstep', [100]),
             p.ParamKeyValue       ('xgca', 'coupling1', 'XGCa_exec/input', 'sml_coupling_xgc1_dir', ["'../xgc1'"]), #2 or nprocs/192
@@ -106,14 +99,9 @@ class XGC1XCA(Campaign):
             p.ParamKeyValue       ('xgca', '1d_diag', 'XGCa_exec/input', 'diag_1d_period', [1]),
             p.ParamKeyValue       ('xgca', 'num_particles', 'XGCa_exec/input', 'ptl_num', [t_particles]),
             p.ParamKeyValue       ('xgca', 'max_particles', 'XGCa_exec/input', 'ptl_maxnum', [5000000]),
-            #p.ParamKeyValue     ('xgca', 'sml_monte_num', 'XGCa_exec/input', 'sml_monte_num', [t_particles]),
-            p.ParamKeyValue       ('xgca', 'deltaf', 'XGCa_exec/input', 'sml_deltaf', [".true."]),
-            p.ParamKeyValue       ('xgca', 'iter_solver', 'XGCa_exec/input', 'sml_iter_solver', [".true."]),
-            p.ParamKeyValue       ('xgca', 'coupling_rate', 'XGCa_exec/input', 'sml_coupling_sampling_rate', [0.1]),
 
             p.ParamRunner       ('rmonitor', 'nprocs', [1]),
             p.ParamRunner       ('restart1', 'nprocs', [1]),
-            p.ParamRunner       ('restart2', 'nprocs', [1]),
     ]
     
     ncpus_per_proc = math.ceil(nthreads/4)
@@ -123,24 +111,20 @@ class XGC1XCA(Campaign):
         for j in range(ncpus_per_proc):
             xgc1_node1.cpu[i * ncpus_per_proc + j] = "xgc1:{}".format(i)
             print(str(i * ncpus_per_proc + j), " xgc1:{}".format(i))
-
-    for i in range(nprocs_per_node):
-        xgc1_node1.gpu[i] = "xgc1:{}".format(i)
  
     xgca_node1 = SummitNode()
     for i in range(nprocs_per_node):
         for j in range(ncpus_per_proc):
             xgca_node1.cpu[i * ncpus_per_proc + j] = "xgca:{}".format(i)
             print(str(i * ncpus_per_proc + j), " xgca:{}".format(i))
-
+    '''
     for i in range(nprocs_per_node):
         xgca_node1.gpu[i] = ["xgca:{}".format(i)]
         xgc1_node1.gpu[i] = ["xgc1:{}".format(i)]
-
+    '''
 
     other_node1 = SummitNode()
     other_node1.cpu[0] = "restart1:0"
-    other_node1.cpu[5] = "restart2:0"
     other_node1.cpu[1] = "rmonitor:0"
     other_node1.cpu[2] = "rmonitor:0"
     other_node1.cpu[3] = "rmonitor:0"
@@ -148,15 +132,15 @@ class XGC1XCA(Campaign):
     
     seperate_node_layout1 = [xgc1_node1, xgca_node1, other_node1]
 
-    sweep1 = p.Sweep (parameters = sweep1_parameters, node_layout={'summit':seperate_node_layout1}, rc_dependency={'xgca':'xgc1', 'restart1':'xgc1', 'restart2':'xgca'})
+    sweep1 = p.Sweep (parameters = sweep1_parameters, node_layout={'summit':seperate_node_layout1}, rc_dependency={'xgca':'xgc1', 'restart1':'xgca'})
 
     # Create a SweepGroup and add the above Sweeps. Set batch job properties such as the no. of nodes, 
     sweepGroup1 = p.SweepGroup ("sg-1", # A unique name for the SweepGroup
-                                walltime=3600,  # Total runtime for the SweepGroup
+                                walltime=4500,  # Total runtime for the SweepGroup
                                 #per_run_timeout=400,    # Timeout for each experiment                                
                                 parameter_groups=[sweep1],   # Sweeps to include in this group
                                 launch_mode='default',  # Launch mode: default, or MPMD if supported
-                                nodes=33,  # No. of nodes for the batch job.
+                                nodes=15,  # No. of nodes for the batch job.
                                 run_repetitions=0,  # No. of times each experiment in the group must be repeated (Total no. of runs here will be 3)
                                 component_subdirs = True, # Codes have their own separate workspace in the experiment directory
                                 component_inputs = {'xgc1': ['XGC1_exec/adios.in','XGC1_exec/mon_in', 'XGC1_exec/petsc.rc',  SymLink('/gpfs/alpine/scratch/ssinghal/csc299/XGC1-XGCA-EXPS/06-xgc1-xca/XGC-Devel-xgc1-xgca-coupling/xgc_build/xgc-es'), SymLink('XGC-1_inputs'), 'XGC1_exec/adioscfg.xml'], 
