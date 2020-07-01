@@ -131,7 +131,7 @@ class DynamicControls():
         return port, timestamp
 
     def _decode_and_inact(self, message):
-        #print("decoding message type")
+        print("Decoding message ", time.time() )
         #sys.stdout.flush()
         refresh = False
         port = message["socket"]
@@ -259,6 +259,9 @@ class DynamicControls():
                            continue
                        if n_map['N_STEPS'][run] == self.pipeline_runs[pipeline_id][run]['last_killed'] or n_map['N_STEPS'][run] == 0: 
                            continue
+                       if run == 'rendering':
+                           continue
+
                        for parents in dag_parent[run].keys():
                           done_run = 0
                        """ 
@@ -273,20 +276,20 @@ class DynamicControls():
                        """
                        if done_run == 1:
                            continue
-                       elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] >= 2 * expected_steptime and n_map['N_STEPS'][run] < n_map['N_STEPS'][parents]:
+                       elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] > 1.2 * expected_steptime: # and n_map['N_STEPS'][run] <= n_map['N_STEPS'][parents]:
                            print("Adding run ",run , " to inc set") 
                            runs_names_inc.append(run)
-                           runs_params[run] = {'cpus_node':'2', 'command':'add'}
-                           new_per_node += 2
+                           runs_params[run] = {'cpus_node':'1', 'command':'add'}
+                           new_per_node += 1
                            #self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
-                       elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] < 0.5 * expected_steptime and (n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] or n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] -1 ):
+                       elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] < 0.8 * expected_steptime: # and (n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] or n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] -1 ):
                            n_per_node, m_cpus, m_gpus, rns = self.consumer.get_active_cres(pipeline_id, [run], 0) 
                            #print ("run name ", run, " npernode ", n_per_node, flush = True)
-                           if n_per_node > 2:
+                           if n_per_node > 1:
                                print("Adding run ", run , " to dec set") 
                                runs_names_dec.append(run)
-                               runs_params[run] = {'cpus_node':'2', 'command':'del'}
-                               new_per_node -= 2
+                               runs_params[run] = {'cpus_node':'1', 'command':'del'}
+                               new_per_node -= 1
                                #self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
                        
                run_names = []
@@ -342,7 +345,7 @@ class DynamicControls():
                        break   
                    for vic_name in vic_names:
                        if vic_name in runs_names_inc:
-                           if len(cpus) == new_per_node - 2:
+                           if len(cpus) == new_per_node - 1:
                                x_per_node, m_cpus, m_gpus, rns = self.consumer.get_active_cres(pipeline_id, [vic_name], all=0)                           
                                cpus = [x for x in cpus if x not in m_cpus]
                            else:
@@ -350,10 +353,10 @@ class DynamicControls():
                                m_cpus, m_gpus = self.consumer.stop_pipeline_runs(pipeline_id, [vic_name])
                                print("Stopped the pipeline : ", pipeline_id, " run(victim)  : ", vic_name, "  Timestamp : ", time.time(), "CPUS" ,  m_cpus, "GPUS", m_gpus)
                            new_per_node -= len(m_cpus)
-                           new_per_node -= 2
+                           new_per_node -= 1
                            run_names.remove(vic_name)
                        elif vic_name in runs_names_dec:
-                           new_per_node += 2
+                           new_per_node += 1
                            print("Stopping the pipeline : ", pipeline_id, " run(victim)  : ", vic_name, "  Timestamp : ", time.time())
 
                            m_cpus, m_gpus = self.consumer.stop_pipeline_runs(pipeline_id, [vic_name])
@@ -440,7 +443,7 @@ class DynamicControls():
     def _sender(self):   
         keep_requesting = True 
         stop = False
-        time.sleep(120) 
+        time.sleep(60) 
 
         #print("Sender: Starting....", flush = True) 
         while keep_requesting == True:
@@ -448,6 +451,8 @@ class DynamicControls():
             try:
                 with self.send_cond:
                     if self.stop_send == True:
+                        keep_requesting == False 
+                        #print("Sender: Signing off...")
                         keep_requesting == False 
                         #print("Sender: Signing off...")
                         continue
@@ -533,7 +538,7 @@ class DynamicControls():
         adios2_eng = os.environ.get("TAU_ADIOS2_ENGINE", "BPFile")
         '''
         workflow_dagfile = os.environ.get("SAVANNA_WORKFLOW_FILE", "")
-        workflow_model = os.environ.get("SAVANNA_MONITOR_MODEL", "outsteps2")
+        workflow_model = os.environ.get("SAVANNA_MONITOR_MODEL", "outsteps2", "")
         workflow_restart = int(os.environ.get("SAVANNA_RESTART_PIPELINE", 0))
         workflow_restart_steps = -1
         if workflow_restart != 0:
@@ -563,7 +568,7 @@ class DynamicControls():
             eng = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_ENG", "None")
             stream_file = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_STREAM", "None")
             params = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_MPARAMS", "")
-            workflow_model = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_MODEL", "outsteps2")
+            workflow_model = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_MODEL", "outsteps2", "")
             hold_job = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_HOLD", "0")
             priority = int(DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_PRIORITY", "1"))
             if workflow_model == "memory":
