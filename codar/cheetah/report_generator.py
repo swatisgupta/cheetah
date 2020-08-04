@@ -12,14 +12,21 @@ import os
 import sys
 from pathlib import Path
 import json
+import pdb
+import logging
 import csv
 import subprocess
+import shutil
 from codar.cheetah.helpers import get_immediate_subdirs, \
-                                  require_campaign_directory
+                                  require_campaign_directory, find_subdir_path
+from codar.cheetah.error_messages import e_msg
+from codar.savanna import tau
+
+_log = logging.getLogger(' ')
 
 
 class _RunParser:
-    def __init__(self, run_dir, exit_status, user_run_script):
+    def __init__(self, run_dir, exit_status, user_run_script, tau_metrics):
         """
         Class to parse a run directory.
         :param run_dir:
@@ -28,6 +35,7 @@ class _RunParser:
         self.run_dir = run_dir
         self.exit_status = exit_status
         self.user_run_script = user_run_script
+        self.tau_metrics = tau_metrics
 
         self.serialized_run_params = {}
         self.fob_dict = {}
@@ -41,6 +49,8 @@ class _RunParser:
 
         # Store the run's exit status as a column in the csv output
         self.serialized_run_params['exit_status'] = self.exit_status
+
+        _log.debug("Parsing run {}".format(run_dir))
 
     def read_fob_json(self):
         fob_json_filename = os.path.join(self.run_dir,
@@ -78,17 +88,39 @@ class _RunParser:
         # Serialize nested dict and add to list of parsed run dicts
         self.serialize_params_nested_dict(run_params_dict)
 
-    def get_cheetah_perf_data(self):
+    def get_cheetah_perf_data(self, run_dir):
+        """
+        Read codar.savanna.total.workflow and the codar.workflow.walltime.<rc>
+        files
+        """
+
+        # Get the total workflow runtime
+        total_runtime = "N/A"
+        total_time_fname = "codar.savanna.total.walltime"
+        total_runtime_path = os.path.join(run_dir, total_time_fname)
+        if os.path.isfile(total_runtime_path):
+            with open(total_runtime_path) as f:
+                line = f.readline()
+                total_runtime = str(round(float(line),2))
+
+        # Write the total time
+        total_time_key = 'total_workflow_walltime_savanna'
+        self.serialized_run_params[total_time_key] = total_runtime
+
+        # Get the runtimes of individual components apps
         for rc_name in self.rc_names:
             walltime_fname = "codar.workflow.walltime." + rc_name
-            filepath = os.path.join(self.rc_working_dir[rc_name],
-                                    walltime_fname)
-            if Path(filepath).is_file():
+            filepath = os.path.join(run_dir, walltime_fname)
+            #pdb.set_trace()
+            if os.path.isfile(filepath):
+            # if Path(filepath).is_file():
                 with open(filepath) as f:
                     line = f.readline()
                 walltime_str = str(round(float(line), 2))
-                self.serialized_run_params[rc_name + "__time"] = walltime_str
-                self.serialized_run_params['timer_type'] = 'cheetah'
+                self.serialized_run_params[rc_name + "__walltime_savanna"] =\
+                    walltime_str
+
+        _log.debug("Cheetah perf data obtained in {}".format(run_dir))
 
     def read_adios_output_file_sizes(self):
         """
@@ -109,8 +141,9 @@ class _RunParser:
                 self.serialized_run_params[new_key] = key
                 size_key = new_key + "_size"
                 self.serialized_run_params[size_key] = value
+            _log.debug("Read output adios file sizes")
         else:
-            print("Adios output file size data not found")
+            _log.debug("Adios output file size data not found")
 
     def read_node_layout(self):
         """
@@ -123,9 +156,68 @@ class _RunParser:
                 node_layout_key = 'node_layout_' + rc_name_layout[0]
                 self.serialized_run_params[node_layout_key] = rc_name_layout[1]
 
+    def collect_tau_metrics(self):
+        """
+        Run pprof and write to pprof.out in each run directory if tau
+        profiling was turned ON. Run tau utilities to create trace.otf if
+        tracing was turned ON.
+        """
+
+        # Profiling ON
+        if self.fob_dict['tau_profiling']:
+            for rc_name in self.rc_names:
+                profile_dir_name= tau.TAU_PROFILE_PATTERN.format(rc_name)
+                profile_dir_path = find_subdir_path(self.run_dir,
+                                                    profile_dir_name)
+                if not profile_dir_path:
+                    _log.debug("No tau profiles found for {}".format(rc_name))
+                    continue
+
+                _log.debug("Tau profiles found for {}".format(rc_name))
+
+                if not shutil.which('pprof'):
+                    _log.warning(e_msg['PPROF_NOT_FOUND'])
+                    return
+
+                pprof_out = os.path.join(profile_dir_path, "pprof.out")
+                pprof_out_f = open(pprof_out, "w")
+                subprocess.run(["pprof"], cwd=profile_dir_path,
+                               stdout=pprof_out_f, stderr=pprof_out_f)
+
+        else:
+            _log.debug("No TAU profiles found")
+
+        # Tracing ON
+        if self.fob_dict['tau_tracing']:
+            for rc_name in self.rc_names:
+                trace_dir_name = tau.TAU_TRACE_PATTERN.format(rc_name)
+                trace_dir_path = find_subdir_path(self.run_dir,
+                                                    trace_dir_name)
+                if not trace_dir_path:
+                    _log.debug("No tau traces found for {}".format(rc_name))
+                    continue
+
+                trace_out = os.path.join(trace_dir_path, "trace.out")
+                trace_out_f = open(trace_out, "w")
+
+                # Run tau_treemerge.pl
+                if not shutil.which('tau_treemerge.pl'):
+                    _log.warning(e_msg['TAU_TREEMERGE_NOT_FOUND'])
+                    return
+
+                subprocess.run(['tau_treemerge.pl'], cwd=trace_dir_path,
+                               stdout=trace_out_f, stderr=trace_out_f)
+
+                # Run tau2otf
+                otf_args = ["tau2otf", "tau.trc", "tau.edf", "trace.otf"]
+                subprocess.run(otf_args, cwd=trace_dir_path,
+                               stdout=trace_out_f, stderr=trace_out_f)
+            
+                _log.debug("Tau traces found for {}".format(rc_name))
+        else:
+            _log.debug("No TAU traces found")
+
     def execute_user_run_script(self):
-        if self.exit_status != 'succeeded':
-            return
         if self.user_run_script is not None:
             subprocess.check_call(os.path.abspath(self.user_run_script),
                                   cwd=self.run_dir)
@@ -135,37 +227,13 @@ class _RunParser:
         try:
             with open(user_file) as f:
                 user_report_d = json.load(f)
+                _log.debug('Found cheetah_user_report.json')
         except:
-            print("Could not find cheetah_user_report.json. Skipping "
-                  "capturing user report.")
+            _log.debug("No cheetah_user_report.json found")
             return
 
         for key,value in user_report_d.items():
             self.serialized_run_params[key] = value
-
-    def verify_run_successful(self):
-        """
-
-        :return:
-        """
-
-        # Open status return files for all RCs to verify they exited cleanly
-        for rc in self.rc_names:
-            return_code_file = os.path.join(self.rc_working_dir[rc],
-                                            "codar.workflow.return." + rc)
-            if not Path(return_code_file).is_file():
-                print("WARN: Could not find file " + return_code_file +
-                      ". Skipping run directory.")
-                return False
-            with open(return_code_file) as f:
-                line = f.readline()
-                ret_code = int(line.strip())
-                if ret_code != 0:
-                    print("WARN: Run component " + rc +
-                          " in " + self.run_dir + " did not exit cleanly. " 
-                                                  "Skipping run directory.")
-                    return False
-        return True
 
     def serialize_params_nested_dict(self, nested_run_params_dict):
         """
@@ -195,7 +263,8 @@ class _ReportGenerator:
     """
 
     """
-    def __init__(self, campaign_directory, user_run_script, output_filename):
+    def __init__(self, campaign_directory, user_run_script,
+                 tau_metrics, output_filename):
         # A list of dicts. Each dict contains metadata and performance
         # information about the run
         self.parsed_runs = []
@@ -212,6 +281,10 @@ class _ReportGenerator:
         # additional results.
         self.user_run_script = user_run_script
 
+        # Bool that denotes if tau metrics must be collected.
+        # Runs pprof for tau profiles, and generates otf file for traces.
+        self.tau_metrics = tau_metrics
+
         # Name of the output (csv) file where the performance report will be
         #  written
         self.output_filename = output_filename
@@ -222,13 +295,19 @@ class _ReportGenerator:
         # Dict that holds the exit status of runs
         self.run_status = {}
 
+        _log.info("Campaign directory: {}, user script: {}, tau metric "
+                  "collection: {}, output report in: {}".format(
+            campaign_directory, user_run_script, tau_metrics, output_filename))
+
     def parse_campaign(self):
         """
-
-        :return:
         """
 
-        print("Parsing campaign", self.campaign_directory, "...")
+        campaign_id_file = os.path.join(self.campaign_directory, ".campaign")
+        assert os.path.isfile(campaign_id_file),\
+            "{} is not the campaign root directory".format(campaign_id_file)
+
+        _log.info("Parsing campaign {}".format(self.campaign_directory))
 
         # Traverse user campaigns
         self.parse_user_campaigns()
@@ -247,20 +326,24 @@ class _ReportGenerator:
 
         # Traverse user campaigns
         for user in user_dirs:
-            print("Parsing sweep groups for", user, "...")
+            if '__pycache__' in user:
+                continue
+
+            _log.info("Parsing sweep groups for {}".format(user))
             self.current_campaign_user = user
 
             user_dir = os.path.join(self.campaign_directory, user)
 
             # Verify that current dir is a user-level campaign endpoint by
             # checking for the presence of the campaign-env.sh file.
-            assert (os.path.isfile(os.path.join(user_dir, "campaign-env.sh"))), \
-                "Current directory is not a user-level campaign"
+            campaign_env = os.path.join(user_dir, "campaign-env.sh")
+            assert (os.path.isfile(campaign_env)),\
+                "ERROR: Could not find campaign_env.sh at {}".format(user_dir)
 
             # Walk through sweep groups
             sweep_groups = get_immediate_subdirs(user_dir)
             if not sweep_groups:
-                print("No sweep groups found")
+                _log.info("No sweep groups found")
                 return
 
             for sweep_group in sweep_groups:
@@ -272,7 +355,7 @@ class _ReportGenerator:
         Parse sweep group and get post-run performance information
         """
 
-        print("Parsing sweep group " + group_dir)
+        _log.info("Parsing sweep group {}".format(group_dir))
 
         # Check if group was run by checking if status file exists
         status_file = os.path.join(group_dir, "codar.workflow.status.json")
@@ -282,7 +365,7 @@ class _ReportGenerator:
             with open(status_file, 'r') as f:
                 status_json = json.load(f)
         except:
-            print("ERROR: Could not read status file " + status_file)
+            _log.error("Could not read status file {}".format(status_file))
             return
 
         # Parse runs that have completed
@@ -299,8 +382,9 @@ class _ReportGenerator:
         Parse run directory of a sweep group
         """
 
-        print("Parsing run", run_dir[len(self.campaign_directory)-1:])
-        rp = _RunParser(run_dir, exit_status, self.user_run_script)
+        _log.info("Parsing run {}".format(run_dir))
+        rp = _RunParser(run_dir, exit_status, self.user_run_script,
+                        self.tau_metrics)
 
         # Re-verify that all run components have exited cleanly by
         # checking their codar.workflow.return.[rc_name] file.
@@ -328,20 +412,21 @@ class _ReportGenerator:
 
         # Get timing information if the experiment was successful,
         # else leave the fields blank
-        if exit_status == 'succeeded':
-            # Run sosflow analysis on the run_dir. If sos data is not
-            # available, read timing information recorded by Cheetah
-            rp.get_cheetah_perf_data()
+        rp.get_cheetah_perf_data(run_dir)
 
-            # Get the sizes of the output adios files.
-            # The sizes were calculated by the post-processing function
-            # after the run finished.
-            # For every file, create two columns: 'adios_file_1' and
-            # 'adios_file_1_size', and so on.
-            rp.read_adios_output_file_sizes()
+        # Get the sizes of the output adios files.
+        # The sizes were calculated by the post-processing function
+        # after the run finished.
+        # For every file, create two columns: 'adios_file_1' and
+        # 'adios_file_1_size', and so on.
+        rp.read_adios_output_file_sizes()
 
-            # Run the user-defined run script
-            rp.execute_user_run_script()
+        # Collect tau metrics
+        if self.tau_metrics:
+            rp.collect_tau_metrics()
+
+        # Run the user-defined run script
+        rp.execute_user_run_script()
 
         # Add any new params discovered in this run dir to unique_keys
         for key in rp.serialized_run_params:
@@ -355,29 +440,36 @@ class _ReportGenerator:
 
         :return:
         """
-        print("Done generating report.")
-        print("Writing output to " + self.output_filename)
+        _log.info("Done generating report.")
+        _log.info("Writing output to {}".format(self.output_filename))
         with open(self.output_filename, 'w') as f:
             dict_writer = csv.DictWriter(f, sorted(self.unique_keys))
             dict_writer.writeheader()
             dict_writer.writerows(self.parsed_runs)
 
 
-def generate_report(campaign_directory, user_run_script, output_file_path):
+def generate_report(campaign_directory, user_run_script,
+                    tau_metrics, output_file_path, verbose_level):
     """
     This is a post-run function.
     It walks the campaign tree and retrieves performance information
     about all completed runs.
     """
 
+    # logging.basicConfig(level=logging.INFO)
+    if verbose_level:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+
     # Ensure this is a campaign by checking for the presence of the
     # .campaign file
     require_campaign_directory(campaign_directory)
 
-    rg = _ReportGenerator(campaign_directory, user_run_script, output_file_path)
+    rg = _ReportGenerator(campaign_directory, user_run_script,
+                          tau_metrics, output_file_path)
     rg.parse_campaign()
 
 
 if __name__ == "__main__":
-    generate_report(sys.argv[1], sys.argv[2])
-
+    generate_report(sys.argv[1], sys.argv[2], True)

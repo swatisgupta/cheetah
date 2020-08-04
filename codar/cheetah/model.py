@@ -33,7 +33,8 @@ from codar.cheetah.parameters import ParamCmdLineArg
 from codar.cheetah.exc import CheetahException
 
 
-RESERVED_CODE_NAMES = set(['post-process'])
+RESERVED_CODE_NAMES = {'post-process'}
+sweeps_any_machine = 'MACHINE_ANY'
 
 
 class Campaign(object):
@@ -86,9 +87,6 @@ class Campaign(object):
     # when using super computers.
     scheduler_options = {}
 
-    # None means use default
-    tau_config = None
-
     # None means use 'sosd' in the app dir
     # TODO: make this part of machine config? Or does it make sense to
     # have per-app binaries for sos?
@@ -139,20 +137,6 @@ class Campaign(object):
                 'Code names conflict with reserved names: '
                 + ", ".join(str(name) for name in conflict_names))
 
-        # Resolve relative code exe pahts. Checking for existence is not
-        # done until make_experiment_run_dir is called to simplify unit
-        # testing.
-        for code_name, code in self.codes.items():
-            exe_path = code['exe']
-            if not exe_path.startswith('/'):
-                exe_path = os.path.join(self.app_dir, exe_path)
-                code['exe'] = exe_path
-
-        if self.tau_config is None:
-            self.tau_config = config.etc_path('tau.conf')
-        elif not self.tau_config.startswith('/'):
-            self.tau_config = os.path.join(self.app_dir, self.tau_config)
-
         if self.run_post_process_script is not None:
             self.run_post_process_script = self._experiment_relative_path(
                                                 self.run_post_process_script)
@@ -196,7 +180,7 @@ class Campaign(object):
                 % (machine_name, self.name))
         return machine
 
-    def make_experiment_run_dir(self, output_dir, _check_code_paths=True):
+    def make_experiment_run_dir(self, output_dir, _check_code_paths=False):
         """Produce scripts and directory structure for running the experiment.
 
         Directory structure will be a subdirectory for each scheduler group,
@@ -213,6 +197,17 @@ class Campaign(object):
                 raise exc.CheetahException(
                         'bad umask, user r-x must be allowed')
             os.umask(umask_int)
+
+        # Get the sweep groups for this machine
+        if type(self.sweeps) == dict:
+            _sweeps_this_mc = self.sweeps.get(self.machine.name, None) or []
+            _sweeps_any_mc = self.sweeps.get(sweeps_any_machine, None) or []
+
+            self.sweeps = []
+            self.sweeps.extend(_sweeps_this_mc)
+            self.sweeps.extend(_sweeps_any_mc)
+
+            assert len(self.sweeps) > 0, "No sweep groups found."
 
         # Create the top level campaign directory
         _output_dir = os.path.abspath(output_dir)
@@ -294,14 +289,6 @@ class Campaign(object):
 
                     # TODO: validate node layout against machine model
 
-                    # Summit override. Don't support MPMD yet.
-                    if self.machine.name.lower() == "summit":
-                        if group.launch_mode:
-                            if group.launch_mode.lower() == 'mpmd':
-                                print("MPMD not supported on Summit yet."
-                                      "Changing to default launch mode.")
-                                group.launch_mode = 'default'
-
                     sweep_runs = [Run(inst, self.codes, self.app_dir,
                                       os.path.join(
                                           group_output_dir,
@@ -318,6 +305,23 @@ class Campaign(object):
                                       group.component_inputs)
                                   for i, inst in enumerate(
                             sweep.get_instances())]
+
+                    # we dont support mpmd mode with dependencies
+                    try:
+                        if group.launch_mode.lower() == 'mpmd':
+                            assert sweep.rc_dependency is None, \
+                                "Dependencies in MPMD mode not supported"
+                    except AttributeError:
+                        pass
+
+                    # we dont support mpmd on deepthought2
+                    try:
+                        if self.machine.machine_name.lower() == 'deepthought2':
+                            assert group.launch_mode.lower() not in 'mpmd',\
+                                "mpmd mode not implemented for deepthought2"
+                    except AttributeError:
+                        pass
+
                     group_runs.extend(sweep_runs)
                     group_run_offset += len(sweep_runs)
             self.runs.extend(group_runs)
@@ -358,7 +362,8 @@ class Campaign(object):
                 walltime=group.walltime,
                 timeout=group.per_run_timeout,
                 node_exclusive=self.machine.node_exclusive,
-                tau_config=self.tau_config,
+                tau_profiling=group.tau_profiling,
+                tau_tracing=group.tau_tracing,
                 machine=self.machine,
                 sosd_path=self.sosd_path,
                 sos_analysis_path=self.sos_analysis_path,
@@ -397,7 +402,9 @@ class Campaign(object):
         requested_group_names = []
         for group_i, group in enumerate(self.sweeps):
             if not isinstance(group, parameters.SweepGroup):
-                raise ValueError("top level run groups must be SweepGroup")
+                raise ValueError("'sweeps' must be a list of SweepGroup "
+                                 "objects. Some objects are of type "
+                                 "{}".format(type(group)))
             requested_group_names.append(group.name)
 
         existing_groups = next(os.walk(campaign_dir))[1]

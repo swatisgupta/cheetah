@@ -23,9 +23,6 @@ from codar.cheetah.adios2_interface import get_adios_version
 from codar.cheetah import adios2_interface as adios2
 
 
-TAU_PROFILE_PATTERN = "codar.cheetah.tau-{code}"
-
-
 class Launcher(object):
     """
     Class to represent a single batch job or submission script.
@@ -65,7 +62,7 @@ class Launcher(object):
                                timeout, machine,
                                sosd_path=None,
                                sos_analysis_path=None,
-                               tau_config=None,
+                               tau_profiling=False, tau_tracing=False,
                                kill_on_partial_failure=False,
                                run_post_process_script=None,
                                run_post_process_stop_on_failure=False,
@@ -101,9 +98,6 @@ class Launcher(object):
                                    run.run_path,
                                    machine.processes_per_node)
 
-            if tau_config is not None:
-                copy_to_dir(tau_config, run.run_path)
-
             # Copy the global input files common to all components
             for input_rpath in run.inputs:
                 copy_to_dir(input_rpath, run.run_path)
@@ -137,8 +131,9 @@ class Launcher(object):
                             copytree_to_dir(input_file, dest)
 
                         else:
-                            raise exc("Could not determine the type for "
-                                      "component input {}").format(input_file)
+                            raise exc.CheetahException \
+                                ("Could not component input {}"
+                                 .format(input_file))
 
             # ADIOS XML param support
             adios_xml_params = \
@@ -181,7 +176,7 @@ class Launcher(object):
                 else:   # adios version == 2
                     operation_value = list(pv.value.keys())[0]
                     if pv.operation_name in ('engine', 'transport'):
-                        parameters = pv.value.values()
+                        parameters = list(pv.value.values())[0]
                         if pv.operation_name == 'engine':
                             adios2.set_engine(xml_filepath, pv.io_name,
                                               operation_value, parameters)
@@ -193,7 +188,7 @@ class Launcher(object):
                         var_name_dict = pv.value[var_name]
                         var_operation_value = list(var_name_dict.keys())[0]
                         var_op_dict = var_name_dict[var_operation_value]
-                        parameters = var_op_dict.values()
+                        parameters = var_op_dict
                         adios2.set_var_operation(xml_filepath, pv.io_name,
                                                  var_name,
                                                  var_operation_value,
@@ -214,7 +209,9 @@ class Launcher(object):
                 src_filepath = relative_or_absolute_path(app_dir,
                                                          pv.config_filename)
                 # Allow for relative pathnames in the spec
-                src_filename = os.path.basename(src_filepath)
+                src_filename = pv.config_filename
+                if pv.config_filename[0] == '/':
+                    src_filename = os.path.basename(src_filepath)
                 config_filepath = os.path.join(working_dir,
                                                src_filename)
                 if not os.path.isfile(config_filepath):
@@ -245,7 +242,9 @@ class Launcher(object):
                 src_filepath = relative_or_absolute_path(app_dir,
                                                          pv.config_filename)
                 # Allow for relative pathnames in the spec
-                src_filename = os.path.basename(src_filepath)
+                src_filename = pv.config_filename
+                if pv.config_filename[0] == '/':
+                    src_filename = os.path.basename(src_filepath)
                 kv_filepath = os.path.join(working_dir, src_filename)
                 if not os.path.isfile(kv_filepath):
                     copy_to_path(src_filepath, kv_filepath)
@@ -301,21 +300,13 @@ class Launcher(object):
 
             fob_runs = []
             for j, rc in enumerate(run.run_components):
-
-                tau_profile_dir = os.path.join(run.run_path,
-                            TAU_PROFILE_PATTERN.format(code=rc.name))
-                os.makedirs(tau_profile_dir)
-
-                rc.env["PROFILEDIR"] = tau_profile_dir
-                rc.env["TRACEDIR"] = tau_profile_dir
-
                 if timeout is not None:
                     rc.timeout = parse_timedelta_seconds(timeout)
 
                 fob_runs.append(rc.as_fob_data())
 
             fob = dict(id=run.run_id, launch_mode=launch_mode, runs=fob_runs,
-                       working_dir=run.run_path,
+                       working_dir=run.run_path, apps_dir=app_dir,
                        kill_on_partial_failure=kill_on_partial_failure,
                        post_process_script=run_post_process_script,
                        post_process_stop_on_failure=
@@ -323,7 +314,8 @@ class Launcher(object):
                        post_process_args=[params_path_json],
                        node_layout=run.node_layout.serialize_to_dict(),
                        total_nodes=run.total_nodes,
-                       machine_name=machine.name)
+                       machine_name=machine.name,
+                       tau_profiling=tau_profiling, tau_tracing=tau_tracing)
             fob_list.append(fob)
 
             # write to file run dir
@@ -368,6 +360,7 @@ class Launcher(object):
             node_exclusive=node_exclusive,
             account=scheduler_options.get('project', ''),
             queue=scheduler_options.get('queue', ''),
+            reservation=scheduler_options.get('reservation', ''),
             # TODO: require name be valid for all schedulers
             campaign_name='codar.cheetah.'+campaign_name,
             group_name=group_name,
