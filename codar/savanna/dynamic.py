@@ -538,7 +538,7 @@ class DynamicControls():
         adios2_eng = os.environ.get("TAU_ADIOS2_ENGINE", "BPFile")
         '''
         workflow_dagfile = os.environ.get("SAVANNA_WORKFLOW_FILE", "")
-        workflow_model = os.environ.get("SAVANNA_MONITOR_MODEL", "outsteps2", "")
+        workflow_model = os.environ.get("SAVANNA_MONITOR_MODEL", "")
         workflow_restart = int(os.environ.get("SAVANNA_RESTART_PIPELINE", 0))
         workflow_restart_steps = -1
         if workflow_restart != 0:
@@ -568,16 +568,16 @@ class DynamicControls():
             eng = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_ENG", "None")
             stream_file = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_STREAM", "None")
             params = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_MPARAMS", "")
-            workflow_model = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_MODEL", "outsteps2", "")
+            workflow_model = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_MODEL", "")
             hold_job = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_HOLD", "0")
             priority = int(DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_PRIORITY", "1"))
             if workflow_model == "memory":
-                metric = DynamicUtil.get_env(run.env, "TAU_METRICS", "")
+                metrics = DynamicUtil.get_env(run.env, "TAU_METRICS", "")
                 if 'PAPI' in metrics:
                     hclib='papi'
                 elif 'LIKWID' in metrics:
                     hclib='likwid'
-
+                
             if stream_file != "None":
                 stream_file="../" + run.name + "/" + stream_file               
                 run.monitor['stream_eng'] = eng 
