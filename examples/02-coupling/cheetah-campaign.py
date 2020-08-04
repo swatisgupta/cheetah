@@ -24,7 +24,7 @@ class ProducerConsumer(Campaign):
     # CAMPAIGN SETTINGS
     #------------------
     # A list of machines that this campaign is supported on
-    supported_machines = ['local', 'titan', 'theta', 'summit', 'deepthought2_cpu']
+    supported_machines = ['local', 'titan', 'theta', 'summit', 'rhea', 'deepthought2_cpu', 'sdg_tm76']
 
     # Option to kill an experiment (just one experiment, not the full sweep or campaign) if one of the codes fails
     kill_on_partial_failure = True
@@ -42,7 +42,7 @@ class ProducerConsumer(Campaign):
 
     # Scheduler information: job queue, account-id etc. Leave it to None if running on a local machine
     scheduler_options = {'theta': {'project': '', 'queue': 'batch'},
-                         'summit': {'project':''}}
+            'summit': {'project':'csc143','reservation':'csc143_m414'}, 'rhea': {'project':'csc143'}}
 
     # Setup your environment. Loading modules, setting the LD_LIBRARY_PATH etc.
     # Ensure this script is executable
@@ -57,15 +57,20 @@ class ProducerConsumer(Campaign):
             p.ParamRunner       ('mean_calc', 'nprocs', [2]),
             p.ParamCmdLineArg   ('producer', 'array_size_per_pe', 1, [1024*1024,]), # 1M, 2M, 10M
             p.ParamCmdLineArg   ('producer', 'num_steps', 2, [10]),
-            p.ParamADIOS2XML    ('producer', 'producer', 'engine', [ {"SST": {}} ]),
+            p.ParamADIOS2XML    ('producer', 'engine_sst', 'producer', 'engine', [ {"SST": {}} ]),
+            # p.ParamADIOS2XML    ('producer', 'compression', 'producer', 'var_operation', [ {"U": {"zfp":{'accuracy':0.001, 'tolerance':0.9}}} ]),
     ]
 
     # Summit node layout
+    # Create a shared node layout where the producer and mean_calc share compute nodes
     shared_node_nc = SummitNode()
-    for i in range(32):
+
+    # place producer on the first socket
+    for i in range(21):
         shared_node_nc.cpu[i] = 'producer:{}'.format(i)
+    # place analysis on the second socket
     for i in range(8):
-        shared_node_nc.cpu[i] = 'mean_calc:{}'.format(i)
+        shared_node_nc.cpu[22+i] = 'mean_calc:{}'.format(i)
 
 
     # This should be 'obj=machine.VirtualNode()'
@@ -89,7 +94,30 @@ class ProducerConsumer(Campaign):
                                 parameter_groups=[sweep1],
                                 launch_mode='default',  # or MPMD
                                 # optional:
+                                tau_profiling=True,
+                                tau_tracing=False,
                                 # nodes=10,
+                                # tau_profiling=True,
+                                # tau_tracing=False,
+                                # run_repetitions=2, <-- repeat each experiment this many times
+                                # component_subdirs = True, <-- codes have their own separate workspace in the experiment directory
+                                # component_inputs = {'simulation': ['some_input_file'], 'norm_calc': [SymLink('some_large_file')] } <-- inputs required by codes
+                                # max_procs = 64 <-- max no. of procs to run concurrently. depends on 'nodes'
+                                )
+
+    # Create a sweep group from the above sweep. You can place multiple sweeps in the group.
+    # Each group is submitted as a separate job.
+    sweepGroup2 = p.SweepGroup ("sg-2",
+                                walltime=300,
+                                per_run_timeout=60,
+                                parameter_groups=[sweep1],
+                                launch_mode='default',  # or MPMD
+                                # optional:
+                                tau_profiling=True,
+                                tau_tracing=False,
+                                # nodes=10,
+                                # tau_profiling=True,
+                                # tau_tracing=False,
                                 # run_repetitions=2, <-- repeat each experiment this many times
                                 # component_subdirs = True, <-- codes have their own separate workspace in the experiment directory
                                 # component_inputs = {'simulation': ['some_input_file'], 'norm_calc': [SymLink('some_large_file')] } <-- inputs required by codes
@@ -97,5 +125,5 @@ class ProducerConsumer(Campaign):
                                 )
 
     # Sweep groups to be activated
-    sweeps = [sweepGroup1]
+    sweeps = {'MACHINE_ANY':[sweepGroup1], 'summit':[sweepGroup2]}
 
