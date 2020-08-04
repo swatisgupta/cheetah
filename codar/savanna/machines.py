@@ -2,6 +2,7 @@
 Configuration for machines supported by Codar.
 """
 from codar.savanna import exc
+import pdb
 
 
 # Note: not all schedulers support all options, the purpose of this is
@@ -9,7 +10,8 @@ from codar.savanna import exc
 # options. Some options have different names, we favor PBS naming when
 # possible. For example, queue is mapped to partition on cori/slurm.
 # TODO: deeper validation, probably bring back a scheduler model.
-SCHEDULER_OPTIONS = set(["project", "queue", "constraint", "license"])
+SCHEDULER_OPTIONS = {"project", "queue", "constraint", "license",
+                     "reservation"}
 
 
 class MachineNode:
@@ -117,8 +119,6 @@ class Machine(object):
         self.scheduler_name = scheduler_name
         self.runner_name = runner_name
         self.node_class = node_class
-        # TODO: should the workflow script have knowledge of different
-        # machines, or just generic options configured by Cheetah?
         self.processes_per_node = processes_per_node
         self.node_exclusive = node_exclusive
         _check_known_scheduler_options(SCHEDULER_OPTIONS, scheduler_options)
@@ -171,6 +171,22 @@ cori = Machine('cori', "slurm", "srun", MachineNode,
                                       constraint="haswell",
                                       license="SCRATCH,project"))
 
+sdg_tm76 = Machine('sdg_tm76', "slurm", "srun", MachineNode,
+                processes_per_node=96, node_exclusive=True,
+                dataspaces_servers_per_node=1, # needs to be removed
+                scheduler_options=dict(project="", queue="default",
+                                       reservation=""))
+
+rhea = Machine('rhea', "slurm", "srun", MachineNode,
+                processes_per_node=16, node_exclusive=True,
+                dataspaces_servers_per_node=1, # needs to be removed
+                scheduler_options=dict(project="",queue="batch",
+                                       reservation=""))
+
+rhea_gpu = Machine('rhea_gpu', "slurm", "srun", MachineNode,
+                processes_per_node=14, node_exclusive=True,
+                dataspaces_servers_per_node=1, # needs to be removed
+                scheduler_options=dict(project="",queue="gpu", reservation=""))
 
 theta = Machine('theta', "cobalt", "aprun", MachineNode,
                 processes_per_node=64, node_exclusive=True,
@@ -181,7 +197,7 @@ theta = Machine('theta', "cobalt", "aprun", MachineNode,
 
 summit = Machine('summit', "ibm_lsf", "jsrun", SummitNode,
                  processes_per_node=42, node_exclusive=True,
-                 scheduler_options=dict(project=""))
+                 scheduler_options=dict(project="", reservation=""))
 
 
 deepthought2_cpu = Machine('deepthought2_cpu', "slurm", "mpirunc", DTH2CPUNode,

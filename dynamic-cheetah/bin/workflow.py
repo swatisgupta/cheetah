@@ -1,0 +1,7 @@
+#!/lustre/ssinghal/cheetah/dynamic-cheetah/bin/python3
+# EASY-INSTALL-DEV-SCRIPT: 'cheetah==0.5.1','workflow.py'
+__requires__ = 'cheetah==0.5.1'
+__import__('pkg_resources').require('cheetah==0.5.1')
+__file__ = '/lustre/ssinghal/cheetah/bin/workflow.py'
+with open(__file__) as f:
+    exec(compile(f.read(), __file__, 'exec'))

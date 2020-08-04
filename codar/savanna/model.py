@@ -20,13 +20,13 @@ import threading
 import signal
 import logging
 from queue import Queue
-import copy
 import pdb
 import copy
 import json
 from codar.savanna.dynamic_util import DynamicUtil
 
-from codar.savanna import status, machines, summit_helper, deepthought2_helper
+from codar.savanna import tau, status, machines, summit_helper, \
+    deepthought2_helper
 from codar.savanna.exc import SavannaException
 from codar.savanna.node_layout import NodeLayout
 from codar.savanna.dynamic_util import DynamicUtil
@@ -74,11 +74,12 @@ class Run(threading.Thread):
                  return_path=None, walltime_path=None,
                  log_prefix=None, sleep_after=None,
                  depends_on_runs=None, hostfile=None,
-                 runner_override=False):
+                 runner_override=False,
+                 tau_profiling=False, tau_tracing=False, tau_exec='tau_exec'):
         threading.Thread.__init__(self, name="Thread-Run-" + name)
         self.name = name
         self.exe = exe
-        self.args = args
+        self.args = list(filter(None, args))
         self.sched_args = sched_args
         self.env = env or {}
         self.working_dir = working_dir
@@ -88,6 +89,14 @@ class Run(threading.Thread):
         self._deliberatily_killed = False
         self.hold = False
         self.grace_kill = True
+
+        # Check tau options and set self.exe to tau_exec
+        self.tau_profiling = tau_profiling
+        self.tau_tracing = tau_tracing
+        self.tau_exec = tau_exec
+        if self.tau_profiling or self.tau_tracing:
+            self._add_tau_support()
+
         # res_set, nrs, and rs_per_host represent resource_set definition,
         # total no. of resource sets, and the no. of resource sets per host
         # respectively. Reqd for Summit.
@@ -133,9 +142,9 @@ class Run(threading.Thread):
         # mpi hostfile option
         self.hostfile = hostfile
 
-        # Machine and nodes assigned are set by pipeline just before run is
-        # started
         self.machine = None
+
+        # nodes assigned needed for Summit
         self.nodes_assigned = None
 
         # node_config for node-sharing on summit
@@ -151,6 +160,9 @@ class Run(threading.Thread):
         # An override option to launch the code without the machine runner (
         # aprun/jsrun/srun etc.
         self.runner_override = runner_override
+
+        # For mpmd mode on machines such as Summit, keep a list of child runs
+        self.child_runs = None
 
     @classmethod
     def from_data(cls, data):
@@ -173,27 +185,84 @@ class Run(threading.Thread):
                 sleep_after=data.get('sleep_after'),
                 depends_on_runs=data.get('after_rc_done'),
                 hostfile=data.get('hostfile'),
-                runner_override=data.get('runner_override'))
+                runner_override=data.get('runner_override'),
+                tau_profiling=data.get('tau_profiling', False),
+                tau_tracing=data.get('tau_tracing', False))
 
         return r
 
     @classmethod
     def mpmd_run(cls, runs):
+        """
+        Returns a new Run object
+        """
+
+        # For Summit, just return runs. The ERF helper will handle it. For
+        # other machines, return a single aggregated Run object
+
+        if runs[0].machine.name.lower() == 'summit':
+            # create a run object, name it 'mpmd', and add runs as child runs
+            r = Run(name='mpmd', exe=None, args=None, sched_args=None,
+                    env=runs[0].env, working_dir=runs[0].working_dir,
+                    timeout=runs[0].timeout, nprocs=None, res_set=None,
+                    stdout_path=None, stderr_path=None, return_path=None,
+                    walltime_path=None, sleep_after=None,
+                    depends_on_runs=None, hostfile=None, runner_override=None)
+
+            # Pipeline sets the machine for its runs, so you have to
+            # explicitly do it here as well.
+            r.machine = runs[0].machine
+
+            r.child_runs = runs
+            return r
+
         if len(runs) == 1:
             return runs
 
-        name = '-'.join(run.name for run in runs)
+        # this is for regular mpmd launches that where the launch command is
+        # a ':' separated list of individual app launches
         mpmd_args = runs[0].args
-
         for run in runs[1:]:
-            run_args = run.runner.wrap(run)
+            run_args = run.runner.wrap(run, run.sched_args)
             del run_args[0]
             mpmd_args.extend(":")
             mpmd_args.extend(run_args)
+            # no need to set run.nodes = sum(child run.nodes)
 
         r = runs[0]
         r.args = mpmd_args
         return r
+
+    def _add_tau_support(self):
+        """
+        Set the exe to tau_exec and add tau env vars to self.env
+        """
+
+        # Adjust self's exe and paths. Set exe to tau_exec
+        _args = [self.exe] + self.args
+        self.args = _args.copy()
+        self.exe = self.tau_exec
+        
+        self.env['TAU_PROFILE'] = "0"
+        self.env['TAU_TRACE'] = "0"
+
+        # Profiling
+        if self.tau_profiling:
+            profiledir = os.path.join(
+                self.working_dir, tau.TAU_PROFILE_PATTERN.format(self.name))
+            self.env['TAU_PROFILE'] = "1"
+            self.env['PROFILEDIR'] = profiledir
+            if not os.path.exists(profiledir):
+                os.makedirs(profiledir)
+
+        # Tracing
+        if self.tau_tracing:
+            tracedir = os.path.join(
+                self.working_dir, tau.TAU_TRACE_PATTERN.format(self.name))
+            self.env['TAU_TRACE'] = "1"
+            self.env['TRACEDIR'] = tracedir
+            if not os.path.exists(tracedir):
+                os.makedirs(tracedir)
 
     def set_runner(self, runner):
         self.runner = runner
@@ -273,7 +342,12 @@ class Run(threading.Thread):
 
         if self.machine.name.lower() == 'summit':
             self.erf_file = self.working_dir + "/" + self.name + ".erf_input"
-            summit_helper.create_erf_file(self)
+
+            # for mpmd runs
+            if self.child_runs is not None:
+                summit_helper.create_erf_file_mpmd(self)
+            else:
+                summit_helper.create_erf_file(self)
 
         if 'deepthought2_cpu' in self.machine.name.lower():
             #print("creating rankfile")
@@ -386,10 +460,10 @@ class Run(threading.Thread):
         chance to exit cleanly with CONT+TERM, then attempt to KILL after
         a delay."""
         _log.debug('%s _term_kill', self.log_prefix)
-        os.killpg(self._pgid, signal.SIGCONT)
-        os.killpg(self._pgid, signal.SIGTERM)
-        time.sleep(KILL_WAIT)
         try:
+            os.killpg(self._pgid, signal.SIGCONT)
+            os.killpg(self._pgid, signal.SIGTERM)
+            time.sleep(KILL_WAIT)
             os.killpg(self._pgid, signal.SIGKILL)
         except ProcessLookupError:
             # this happens if all processes in the pgroup have already
@@ -425,6 +499,8 @@ class Run(threading.Thread):
                 os.killpg(self._pgid, signum)
             except ProcessLookupError:
                 # pgroup no longer exists, we are done waiting
+                _log.debug('%s Checking if pgroup exists .. not found', 
+                           self.log_prefix)
                 break
             # else pgroup still exists
             time.sleep(delay)
@@ -448,8 +524,9 @@ class Run(threading.Thread):
         # e.g. extend PATH or LD_LIBRARY_PATH rather tha replace it?
         env = os.environ.copy()
         env.update(self.env)
-        _log.debug('%s LD_LIBRARY_PATH=%s', self.log_prefix,
-                   env.get('LD_LIBRARY_PATH', ''))
+        _log.debug("{} {}, LD_LIBRATY_PATH:{}".format(
+            self.log_prefix,self.env, env.get('LD_LIBRARY_PATH','')))
+
         self._p = subprocess.Popen(args, env=env, cwd=self.working_dir,
                                    stdout=out, stderr=err,
                                    preexec_fn=os.setpgrp)
@@ -530,6 +607,9 @@ class Pipeline(object):
         self.fatal_callbacks = set()
         self.total_procs = 0
         self.log_prefix = self.id
+        self._start_time = None
+        self._walltime_path = self.working_dir+"/codar.savanna.total.walltime"
+
         for run in runs:
             self.total_procs += run.nprocs
             run.log_prefix = "%s:%s" % (self.id, run.name)
@@ -563,8 +643,14 @@ class Pipeline(object):
         at least "id" and "runs" keys. The "runs" key must have a list of dict,
         and each dict is parsed using Run.from_data.
         Raises KeyError if a required key is missing."""
+
         runs_data = data["runs"]
         working_dir = data["working_dir"]
+
+        # Read tau options and ensure tau_exec is in PATH
+        tau_profiling = data.get("tau_profiling", False)
+        tau_tracing = data.get("tau_tracing", False)
+
         # Run working dir defaults to pipeline working dir, and can be
         # specified relative to pipeline working dir.
         for rd in runs_data:
@@ -574,8 +660,11 @@ class Pipeline(object):
             elif not run_working_dir.startswith("/"):
                 run_working_dir = os.path.join(working_dir, run_working_dir)
             rd["working_dir"] = run_working_dir
+            rd["tau_profiling"] = tau_profiling
+            rd["tau_tracing"] = tau_tracing
         if not isinstance(runs_data, list):
-            raise ValueError("'runs' key must be a list of dictionaries")
+            _log.error("'runs' key must be a list of dictionaries")
+            return None
         pipe_id = str(data["id"])
         runs = [Run.from_data(rd) for rd in runs_data]
 
@@ -587,15 +676,18 @@ class Pipeline(object):
                     if run.depends_on_runs == tmp_run.name:
                         run.depends_on_runs = tmp_run
                         break
-                assert run.depends_on_runs is not None, \
-                    "Internal failure in dependency management"
+                if run.depends_on_runs is None:
+                    _log.error("Internal failure in dependency management "
+                               "in %s", working_dir)
+                    return None
 
         launch_mode = data.get("launch_mode")
         kill_on_partial_failure = data.get("kill_on_partial_failure", False)
         post_process_script = data.get("post_process_script")
         post_process_args = data.get("post_process_args", [])
         if not isinstance(post_process_args, list):
-            raise ValueError("'post_process_args' must be a list")
+            _log.error("'post_process_args' must be a list in %s", working_dir)
+            return None
         post_process_stop_on_failure = data.get("post_process_stop_on_failure")
         node_layout = data.get("node_layout")
         total_nodes = data.get("total_nodes")
@@ -669,11 +761,23 @@ class Pipeline(object):
         with self._state_lock:
             for run in self.runs:
                 run.set_runner(runner)
-            if self.launch_mode:
-                if self.launch_mode.lower() == 'mpmd':
-                    mpmd_run = Run.mpmd_run(self.runs)
-                    mpmd_run.nodes = self.total_nodes
-                    self.runs = [mpmd_run]
+
+            # Parse the node layout and set the run information.
+            # This requires self.nodes_assigned.
+            # Summit and DeepThought2 support VirtualNode interfaces
+            # Note that the NodeConfig/VirtualNode objects have not been
+            # created at this point, so use the following to check the node
+            # layout type. This must be done before an mpmd run obj is created.
+            layout_type = self.node_layout[0].get('__info_type__') or None
+            if layout_type == 'NodeConfig':
+                self._parse_node_layouts()
+
+            launch_mode = self.launch_mode or 'None'
+            if launch_mode.lower() == 'mpmd':
+                mpmd_run = Run.mpmd_run(self.runs)
+                mpmd_run.nodes = self.total_nodes
+                self.runs = [mpmd_run]
+
             for run in self.runs:
                 run.set_runner(runner)
 
@@ -686,7 +790,7 @@ class Pipeline(object):
                 run.add_callback(self.run_finished)
                 self._active_runs.add(run)
             self._running = True
-
+'''
             # Parse the node layout and set the run information.
             # This requires self.nodes_assigned.
             # Summit and DeepThought2 support VirtualNode interfaces
@@ -698,6 +802,7 @@ class Pipeline(object):
                     self._parse_node_layouts()
             except Exception as e:
                 print("Caught an exception..", e)
+'''
             # Next start pipeline runs in separate thread and return
             # immediately, so we can inject a wait time between starting runs.
             self._pipe_thread = threading.Thread(target=self._start)
@@ -784,6 +889,8 @@ class Pipeline(object):
         with self._state_lock:
             self.runs = runs
             self._active_runs.update(runs) 
+
+        self._start_time = time.time()
 
         for run in self.runs:
             if run.name == 'rmonitor':
@@ -1185,6 +1292,9 @@ class Pipeline(object):
         """
 
         def parse_lists(_nl):
+            """
+            dont judge me
+            """
             for l in _nl:
                 for code in l:
                     if code.depends_on_runs:
@@ -1228,13 +1338,18 @@ class Pipeline(object):
                 elif self.restart == True:
                     restart = True
             elif not self._active_runs:
+                # save the total runtime here to ensure it is captured
+                # before the post process script is run
+                self.save_walltime()
                 self.run_post_process_script()
                 run_done_callbacks = True
 
             elif run._deliberatily_killed == False and self.kill_on_partial_failure and not run.succeeded:
                 _log.warn('%s run %s failed, killing remaining',
                           self.log_prefix, run.name)
-                # if configured, kill all runs in the pipeline if one of
+                self.save_walltime()
+
+               # if configured, kill all runs in the pipeline if one of
                 # them has a nonzero exit code. Still allow post process to
                 # run if set.
                 for run2 in self._active_runs:
@@ -1279,6 +1394,7 @@ class Pipeline(object):
         try:
             outf = open(stdout_path, 'w')
             errf = open(stderr_path, 'w')
+            rval = None
             rval = subprocess.call(args, stdout=outf, stderr=errf,
                                    cwd=self.working_dir, timeout=120)
         except subprocess.SubprocessError as e:
@@ -1300,6 +1416,14 @@ class Pipeline(object):
             self._execute_fatal_callbacks()
 
 
+    def save_walltime(self):
+        """
+        Saves the total runtime of the pipeline in a a file.
+        """
+
+        walltime = time.time() - self._start_time
+        with open(self._walltime_path, 'w') as f:
+            f.write(str(walltime) + "\n")
 
     def add_done_callback(self, fn):
         self.done_callbacks.add(fn)
@@ -1348,11 +1472,16 @@ class Pipeline(object):
         # Return if you are using VirtualNode for node layout, as the
         # parsing is done differently for VirtualNode
         # At this point, the node layout is not an object of VirtualNode
+'''
         try:
             if self.node_layout[0]['__info_type__'] == 'NodeConfig':
                 return
         except Exception as e:
             print("Caught an exception ", e)
+'''
+        layout_type = self.node_layout[0].get('__info_type__') or None
+        if layout_type == 'NodeConfig':
+            return
 
         if self.node_layout is None:
             run_names = [run.name for run in self.runs]
