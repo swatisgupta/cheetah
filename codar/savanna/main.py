@@ -97,8 +97,9 @@ def main():
 
     # signal that there are no more pipelines and thread should exit
     # when reached
-    consumer.stop()
+    #consumer.stop()
     #dynamic_cntrl.stop()
+
     # set up signal handlers for graceful exit
     def handle_signal_kill_consumer(signum, frame):
         consumer.kill_all()

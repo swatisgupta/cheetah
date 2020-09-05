@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 
 #from mpi4py import MPI
@@ -86,7 +85,7 @@ class DynamicControls():
                 sys.stdout.flush()
                 message = self.recv_socket.recv()
                 message = message.decode("utf-8") 
-                #print("Received a critical update from monitor : ", message)
+                print("Received a critical update from monitor : ", message)
                 self.recv_socket.send_string("OK")
                 #print("Send ack : OK")
                 sys.stdout.flush()
@@ -130,6 +129,81 @@ class DynamicControls():
             timestamp = datetime.datetime.strptime(date_time_str, '%Y-%m-%d %H:%M:%S.%f')
         return port, timestamp
 
+    def __policy_iterate(self, pipeline_id, update):
+           r_steps = 0
+           n_map = {}
+           for state in update:
+               for node in update.keys():
+                   r_steps = int(update[node]['G_STEPS'])
+                   n_map = update[node]
+                   break
+               break
+
+           with self.pipeline_cond:
+               niter = self.consumer.get_pipeline_nrestart(pipeline_id) + 1
+
+               if pipeline_id not in self.active_pipelines:
+                   return refresh
+
+               restart_steps = int(self.pipeline_restart[pipeline_id])
+               #print("Current steps ", r_steps,  " : Terminate after ", restart_steps)
+               if r_steps != -1 and r_steps >= restart_steps:
+                   print("Stopping the pipeline: ", pipeline_id, " Timestamp : ", time.time())
+                   DynamicUtil.log_dynamic.info("Total steps completed {} for pipeline {}".format(r_steps, pipeline_id))
+                   self.consumer.set_pipeline_restart(pipeline_id, False)
+                   self.consumer.stop_pipeline_all(pipeline_id)
+                   print("Done stopping the pipeline: ", pipeline_id, " Timestamp : ", time.time())
+                   dereg = True
+               else:
+                   run_names = []
+                   run_p = {}
+                   run_map = self.pipeline_runs[pipeline_id]
+
+                   for run in run_map.keys():
+
+                       if run not in n_map['STEPS']:
+                           continue
+
+                       r_params = run_map[run]
+                       #print("Parameters for ", run, "are ", r_params) 
+                       if r_params:
+                           run_cond = int(r_params['model_params'][2])
+                           input_file = r_params['model_params'][5]
+                           key = r_params['model_params'][6]
+                           step_fn = r_params['model_params'][7].strip()
+                           ch_iter = int(r_params['model_params'][8])
+                           max_iter = int(r_params['model_params'][9])
+                           last_killed = int(r_params['last_killed'])
+                           if step_fn == 'log2':
+                               run_cond = run_cond - int(math.log2(run_cond))
+                           elif step_fn == 'log':
+                               run_cond = run_cond - int(math.log(run_cond))
+                           #print("run condition for run ", run, " is ", run_cond, " step function is ", step_fn,  flush = True)   
+                           if niter % ch_iter == 0 and last_killed < niter and n_map['STEPS'][run] >= run_cond and n_map['STEPS'][run] < max_iter and r_steps > (ch_iter-1) * max_iter * 2:
+                               run_names.append(run)
+                               DynamicUtil.log_dynamic.info("Total steps completed {}, steps completed by run {} at iteration {} are {} >= {} for pipeline {}".format(r_steps, run, niter, n_map['STEPS'][run], run_cond,  pipeline_id))
+                               self.pipeline_runs[pipeline_id][run]['model_params'][2] = run_cond
+                               self.pipeline_runs[pipeline_id][run]['model_params'][9] = n_map['STEPS'][run]
+                               self.pipeline_runs[pipeline_id][run]['last_killed'] = niter
+                           run_p[run] = {'nstep' : [input_file, key, run_cond]}
+                   if len(run_names) > 0:
+                       print("Stopping the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", run_p, "  Timestamp : ", time.time())
+                       self.consumer.stop_pipeline_runs(pipeline_id, run_names, run_p)
+                       print("Stopped the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", run_p, "  Timestamp : ", time.time())
+                       #request = self._create_request(model, datetime.now() - self.starttime , "req:change_params", self.pipeline_runs[pipeline_id])
+                       #socket.send_string(request)
+                       #message = socket.recv()
+
+
+    def __policy_stop_on_cond(self):
+        pass 
+
+    def __policy_start_on_cond(self):
+        pass
+
+    def __policy_readjust_on_cond(self):
+        pass
+ 
     def _decode_and_inact(self, message):
         print("Decoding message ", time.time() )
         #sys.stdout.flush()
@@ -154,7 +228,7 @@ class DynamicControls():
          
         dereg = False
         pipeline_id = -1
-        if model == "outsteps2":
+        if model == "heartbeat":
            r_steps = 0
            n_map = {}
            for st in state:  
@@ -218,7 +292,7 @@ class DynamicControls():
                        #request = self._create_request(model, datetime.now() - self.starttime , "req:change_params", self.pipeline_runs[pipeline_id])
                        #socket.send_string(request)
                        #message = socket.recv()
-        if model == "outsteps1":
+        if model == "pace":
            r_steps = 0
            n_map = {}
            for st in state:  
@@ -540,6 +614,7 @@ class DynamicControls():
         workflow_dagfile = os.environ.get("SAVANNA_WORKFLOW_FILE", "")
         workflow_model = os.environ.get("SAVANNA_MONITOR_MODEL", "")
         workflow_restart = int(os.environ.get("SAVANNA_RESTART_PIPELINE", 0))
+        separate_dirs = int(os.environ.get("SAVANNA_SEPARATE_DIRS", 0))
         workflow_restart_steps = -1
         if workflow_restart != 0:
             #print("Setting restart")
@@ -571,6 +646,7 @@ class DynamicControls():
             workflow_model = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_MODEL", "")
             hold_job = DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_HOLD", "0")
             priority = int(DynamicUtil.get_env(run.env, "SAVANNA_MONITOR_PRIORITY", "1"))
+           
             if workflow_model == "memory":
                 metrics = DynamicUtil.get_env(run.env, "TAU_METRICS", "")
                 if 'PAPI' in metrics:
@@ -579,7 +655,8 @@ class DynamicControls():
                     hclib='likwid'
                 
             if stream_file != "None":
-                stream_file="../" + run.name + "/" + stream_file               
+                if separate_dirs == 1:
+                    stream_file="../" + run.name + "/" + stream_file               
                 run.monitor['stream_eng'] = eng 
                 run.monitor['stream_nm'] = stream_file 
                 run.monitor['model_params'] = params.split(',')
@@ -589,7 +666,7 @@ class DynamicControls():
             if int(hold_job) == 1:
                 run.hold = True
 
-            run.grace_kill = True 
+            run.grace_kill = False 
 
             runs_map[run.name] = run.monitor
 
