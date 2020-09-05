@@ -28,7 +28,7 @@ import json
 from codar.savanna.dynamic_util import DynamicUtil
 
 from codar.savanna import tau, status, machines, summit_helper, \
-    deepthought2_helper
+    deepthought2_helper, bridges_helper
 from codar.savanna.error_messages import err_msg
 from codar.savanna.exc import SavannaException
 from codar.savanna.node_layout import NodeLayout
@@ -400,6 +400,19 @@ class Run(threading.Thread):
                                     ".rankfile"
                 deepthought2_helper.create_rankfile(self)
 
+        if 'deepthought2_gpu' in self.machine.name.lower():
+            #print("creating rankfile")
+            if self.node_config is not None:
+                self.dth_rankfile = self.working_dir + '/' + self.name + \
+                                    ".rankfile"
+                deepthought2_helper.create_rankfile(self)
+
+        if 'bridges_gpu' in self.machine.name.lower():
+            #print("creating rankfile")
+            if self.node_config is not None:
+                self.dth_rankfile = self.working_dir + '/' + self.name + \
+                                    ".rankfile"
+                bridges_helper.create_rankfile(self)
         # if self.machine.name.lower() == 'summit':
         #     # are we releasing when the run finishes, or when the pipeline
         #     # finishes? reqd. for dependency mgmt

@@ -330,6 +330,9 @@ class Campaign(object):
                         if self.machine.machine_name.lower() == 'deepthought2':
                             assert group.launch_mode.lower() not in 'mpmd',\
                                 "mpmd mode not implemented for deepthought2"
+                        if self.machine.machine_name.lower() == 'bridges_gpu':
+                            assert group.launch_mode.lower() not in 'mpmd',\
+                                "mpmd mode not implemented for bridges_gpu"
                     except AttributeError:
                         pass
 

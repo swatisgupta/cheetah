@@ -59,6 +59,21 @@ class DTH2GPUNode(MachineNode):
         self.__dict__['__info_type__'] = 'NodeConfig'
         return self.__dict__
 
+class BRGPUNode(MachineNod):
+    def __init__(self):
+        MachineNode.__init__(self, 20, 2)
+
+    def validate_layout(self):
+        # TODO
+        pass
+
+    def to_json(self):
+        """
+        TODO dont know the point of doing this
+        """
+        self.__dict__['__info_type__'] = 'NodeConfig'
+        return self.__dict__
+
 
 class SummitNode(MachineNode):
     def __init__(self):
@@ -210,6 +225,10 @@ deepthought2_gpu = Machine('deepthought2_gpu', "slurm", "mpirung", DTH2GPUNode,
                            scheduler_options=dict(project="", 
                                                   queue="debug"))
 
+bridges_gpu = Machine('brigdes_gpu', "slurm", "mpirung", BRGPUNode,
+                           processes_per_node=16, node_exclusive=False,
+                           scheduler_options=dict(project="", 
+                                                  queue="debug"))
 
 def get_by_name(name):
     assert name == name.lower()
