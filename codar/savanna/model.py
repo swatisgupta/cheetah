@@ -867,19 +867,7 @@ class Pipeline(object):
                 run.add_callback(self.run_finished)
                 self._active_runs.add(run)
             self._running = True
-'''
-            # Parse the node layout and set the run information.
-            # This requires self.nodes_assigned.
-            # Summit and DeepThought2 support VirtualNode interfaces
-            # Note that the NodeConfig/VirtualNode objects have not been
-            # created at this point, so use the following to check the node
-            # layout type
-            try:
-                if self.node_layout[0]['__info_type__'] == 'NodeConfig':
-                    self._parse_node_layouts()
-            except Exception as e:
-                print("Caught an exception..", e)
-'''
+            self._start_time = time.time()
             # Next start pipeline runs in separate thread and return
             # immediately, so we can inject a wait time between starting runs.
             self._pipe_thread = threading.Thread(target=self._start)
@@ -1405,6 +1393,7 @@ class Pipeline(object):
             _log.warn('%s run %s was not killed intentionally',
                        self.log_prefix, run.name)
         restart = False
+
         with self._state_lock:
             self._active_runs.remove(run)
             if len(self._active_runs) == 1:
@@ -1546,16 +1535,6 @@ class Pipeline(object):
         to set node and task per node counts.
         TODO: This should be set by Cheetah in fobs.json"""
 
-        # Return if you are using VirtualNode for node layout, as the
-        # parsing is done differently for VirtualNode
-        # At this point, the node layout is not an object of VirtualNode
-'''
-        try:
-            if self.node_layout[0]['__info_type__'] == 'NodeConfig':
-                return
-        except Exception as e:
-            print("Caught an exception ", e)
-'''
         layout_type = self.node_layout[0].get('__info_type__') or None
         if layout_type == 'NodeConfig':
             return

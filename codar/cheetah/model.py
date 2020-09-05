@@ -137,21 +137,9 @@ class Campaign(object):
                 'Code names conflict with reserved names: '
                 + ", ".join(str(name) for name in conflict_names))
 
-'''
-        # Resolve relative code exe pahts. Checking for existence is not
-        # done until make_experiment_run_dir is called to simplify unit
-        # testing.
-        for code_name, code in self.codes.items():
-            exe_path = code['exe']
-            if not exe_path.startswith('/'):
-                exe_path = os.path.join(self.app_dir, exe_path)
-                code['exe'] = exe_path
-
-'''
         if self.run_post_process_script is not None:
             self.run_post_process_script = self._experiment_relative_path(
                                                 self.run_post_process_script)
-
         if self.sosd_path is None:
             self.sosd_path = os.path.join(self.app_dir, 'sosd')
         elif not self.sosd_path.startswith('/'):
