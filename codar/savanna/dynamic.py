@@ -16,6 +16,7 @@ from codar.savanna.dynamic_util import DynamicUtil
 from queue import Queue 
 import math
 import datetime
+import traceback
 
 class DynamicControls():
     
@@ -108,6 +109,7 @@ class DynamicControls():
 
             except Exception as e:
                 print("Reciever : Got exception...", e)
+                traceback.print_stack()
                 sys.stdout.flush() 
   
     def _open_sender_connections(self, address, port):
@@ -348,22 +350,23 @@ class DynamicControls():
                                 #self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
                                 break
                        """
+                       nadjust = 2
                        if done_run == 1:
                            continue
-                       elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] > 1.2 * expected_steptime: # and n_map['N_STEPS'][run] <= n_map['N_STEPS'][parents]:
+                       elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] > 1.3 * expected_steptime: # and n_map['N_STEPS'][run] <= n_map['N_STEPS'][parents]:
                            print("Adding run ",run , " to inc set") 
                            runs_names_inc.append(run)
-                           runs_params[run] = {'cpus_node':'1', 'command':'add'}
-                           new_per_node += 1
+                           runs_params[run] = {'cpus_node': str(nadjust), 'command':'add'}
+                           new_per_node += nadjust
                            #self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
-                       elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] < 0.8 * expected_steptime: # and (n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] or n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] -1 ):
+                       elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] < 0.7 * expected_steptime: # and (n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] or n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] -1 ):
                            n_per_node, m_cpus, m_gpus, rns = self.consumer.get_active_cres(pipeline_id, [run], 0) 
                            #print ("run name ", run, " npernode ", n_per_node, flush = True)
                            if n_per_node > 1:
                                print("Adding run ", run , " to dec set") 
                                runs_names_dec.append(run)
-                               runs_params[run] = {'cpus_node':'1', 'command':'del'}
-                               new_per_node -= 1
+                               runs_params[run] = {'cpus_node': str(nadjust), 'command':'del'}
+                               new_per_node -= 2
                                #self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
                        
                run_names = []
@@ -419,7 +422,7 @@ class DynamicControls():
                        break   
                    for vic_name in vic_names:
                        if vic_name in runs_names_inc:
-                           if len(cpus) == new_per_node - 1:
+                           if len(cpus) == new_per_node - nadjust:
                                x_per_node, m_cpus, m_gpus, rns = self.consumer.get_active_cres(pipeline_id, [vic_name], all=0)                           
                                cpus = [x for x in cpus if x not in m_cpus]
                            else:
@@ -427,10 +430,10 @@ class DynamicControls():
                                m_cpus, m_gpus = self.consumer.stop_pipeline_runs(pipeline_id, [vic_name])
                                print("Stopped the pipeline : ", pipeline_id, " run(victim)  : ", vic_name, "  Timestamp : ", time.time(), "CPUS" ,  m_cpus, "GPUS", m_gpus)
                            new_per_node -= len(m_cpus)
-                           new_per_node -= 1
+                           new_per_node -= nadjust
                            run_names.remove(vic_name)
                        elif vic_name in runs_names_dec:
-                           new_per_node += 1
+                           new_per_node += nadjust
                            print("Stopping the pipeline : ", pipeline_id, " run(victim)  : ", vic_name, "  Timestamp : ", time.time())
 
                            m_cpus, m_gpus = self.consumer.stop_pipeline_runs(pipeline_id, [vic_name])
@@ -467,7 +470,7 @@ class DynamicControls():
                        print("Run name  : ", runs_x, " Last killed updated to ", n_map['N_STEPS'][runs_x])
                        self.pipeline_runs[pipeline_id][runs_x]['last_killed'] =  n_map['N_STEPS'][runs_x]
                    refresh = True
-                   time.sleep(30)  
+                   time.sleep(120)  
                self.timestamp[pipeline_id] = datetime.datetime.now()
         if dereg == True:
             self._deregister_pipeline(pipeline_id)
@@ -561,7 +564,7 @@ class DynamicControls():
                          message = socket.recv()
                          #print("Received ack msg : ", message)
                          sys.stdout.flush()
-                time.sleep(2) 
+                time.sleep(30) 
             except Exception as e:
                  print("Sender : Got an exception ", e)  
  
@@ -666,7 +669,7 @@ class DynamicControls():
             if int(hold_job) == 1:
                 run.hold = True
 
-            run.grace_kill = False 
+            run.grace_kill = True #False 
 
             runs_map[run.name] = run.monitor
 

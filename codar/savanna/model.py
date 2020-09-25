@@ -28,7 +28,7 @@ import json
 from codar.savanna.dynamic_util import DynamicUtil
 
 from codar.savanna import tau, status, machines, summit_helper, \
-    deepthought2_helper, bridges_helper
+    deepthought2_helper
 from codar.savanna.error_messages import err_msg
 from codar.savanna.exc import SavannaException
 from codar.savanna.node_layout import NodeLayout
@@ -82,13 +82,16 @@ class Run(threading.Thread):
                  runner_override=False,
                  tau_profiling=False, tau_tracing=False, tau_exec='tau_exec'):
         threading.Thread.__init__(self, name="Thread-Run-" + name)
+        print("Name: ", name, " exe: " , exe, flush = True )
         self.name = name
         self.exe = exe
         self.args = args
         if args: self.args = list(filter(None, args))
+        print("Self.args: ", self.args, flush = True )
         self.sched_args = sched_args
         self.env = env or {}
         self.working_dir = working_dir
+        print("workfing dir: ", working_dir, flush = True )
         self.apps_dir = apps_dir
         self.machine = machine
         self.timeout = timeout
@@ -100,13 +103,16 @@ class Run(threading.Thread):
 
         # Get the path to the exe
         self._find_exe()
+        print("found exe", flush = True )
 
         # Check tau options and set self.exe to tau_exec
         self.tau_profiling = tau_profiling
         self.tau_tracing = tau_tracing
         self.tau_exec = tau_exec
         if self.tau_profiling or self.tau_tracing:
-            self._add_tau_support()
+            if self.name != "rmonitor":
+                self._add_tau_support()
+                print("added tau support", flush = True )
 
         # res_set, nrs, and rs_per_host represent resource_set definition,
         # total no. of resource sets, and the no. of resource sets per host
@@ -121,6 +127,7 @@ class Run(threading.Thread):
                                      return_path)
         self.walltime_path = _get_path(working_dir, WALLTIME_NAME + "." + name,
                                        walltime_path)
+        print("set paths", flush = True )
         self.sleep_after = sleep_after
         self._p = None
         self._pgid = None
@@ -178,7 +185,8 @@ class Run(threading.Thread):
             _args = self.args or []
             _args.extend(['>', self.stdout_path, '2>', self.stderr_path])
             self.args = _args
-
+        print("done:", flush= True)
+ 
     @classmethod
     def from_data(cls, data):
         """Create Run instance from nested dictionary data structure, e.g.
@@ -225,7 +233,8 @@ class Run(threading.Thread):
                     timeout=runs[0].timeout, nprocs=None, res_set=None,
                     stdout_path=None, stderr_path=None, return_path=None,
                     walltime_path=None, sleep_after=None,
-                    depends_on_runs=None, hostfile=None, runner_override=None)
+                    depends_on_runs=None, hostfile=None, runner_override=None, 
+                    tau_profiling=runs[0].tau_profiling, tau_tracing=runs[0].tau_tracing)
 
             # Pipeline sets the machine for its runs, so you have to
             # explicitly do it here as well.
@@ -400,19 +409,6 @@ class Run(threading.Thread):
                                     ".rankfile"
                 deepthought2_helper.create_rankfile(self)
 
-        if 'deepthought2_gpu' in self.machine.name.lower():
-            #print("creating rankfile")
-            if self.node_config is not None:
-                self.dth_rankfile = self.working_dir + '/' + self.name + \
-                                    ".rankfile"
-                deepthought2_helper.create_rankfile(self)
-
-        if 'bridges_gpu' in self.machine.name.lower():
-            #print("creating rankfile")
-            if self.node_config is not None:
-                self.dth_rankfile = self.working_dir + '/' + self.name + \
-                                    ".rankfile"
-                bridges_helper.create_rankfile(self)
         # if self.machine.name.lower() == 'summit':
         #     # are we releasing when the run finishes, or when the pipeline
         #     # finishes? reqd. for dependency mgmt
@@ -946,14 +942,25 @@ class Pipeline(object):
             if run.depends_on_runs is not None:
                 tmp_run = run.depends_on_runs
                 depends_on = tmp_run.name
- 
-            run1 = Run(run.name, run.exe, run.args, run.sched_args,
-                       run.env, run.working_dir,
+            exe = run.exe
+            if exe == 'tau_exec':
+                exe = run.args[0].split('/')[-1]
+                exe = exe.split('\'')[0]
+            args = []
+
+            for arg in run.args[1:]:
+                if arg == '>':
+                    break
+                args.append(arg)
+
+            run1 = Run(run.name, exe, args, run.sched_args,
+                       run.env, run.working_dir, run.apps_dir, run.machine, 
                        run.timeout, run.nprocs, run.res_set,
                        run.stdout_path, run.stderr_path,
                        run.return_path, run.walltime_path,
                        run.log_prefix, run.sleep_after, depends_on, run.hostfile,
-                       run.runner_override )
+                       run.runner_override, run.tau_profiling, run.tau_tracing )
+
             run1.runner = run.runner
             run1.callbacks = run.callbacks
             run1.nodes = run.nodes
@@ -1128,7 +1135,7 @@ class Pipeline(object):
                          return cpus, gpus 
 
                      str1 = "Kill requested for pipeline " +  self.id + "'s run : " + run.name
-                     print("Killing the run " + run.name, flush = True ) 	 
+                     print("Killing the run ", run.name, flush = True ) 	 
                      _log.warn(str1)
 
                      run._kill_thread.join()
@@ -1202,7 +1209,7 @@ class Pipeline(object):
 
     
     def restart_runs(self, runs, runs_params, cpus, gpus):
-        #print("Inside force restart...restarting ", runs , "\n")
+        print("Inside force restart...restarting ", runs , "\n", flush = True )
         for run_name in runs:
             new_args = "" 
             cpu_nodes = 0
@@ -1224,7 +1231,7 @@ class Pipeline(object):
                 if "command" in params.keys():
                     command = params["command"]
 
-                #print("Command ...", command, flush = True ) 
+            print("Command ...", command, flush = True ) 
 
             new_procs = 0
             run = None
@@ -1232,7 +1239,7 @@ class Pipeline(object):
             for run in self._active_runs:
                 if run.name == run_name: 
                     if run.wait_for_kill() == True or run.hold == True:
-                        #print("Found the run ", run.name , " in run name..")
+                        print("Found the run ", run.name , " in run name..", flush = True)
                         found = 1
                         break
                     else: 
@@ -1255,16 +1262,34 @@ class Pipeline(object):
                  if new_args == "":
                     new_args = run.sched_args 
 
-                 
-                 new_run = Run( run.name, run.exe, run.args, run.sched_args,
-                               run.env, run.working_dir,
+                 exe = run.exe
+                 if exe == 'tau_exec':
+                     exe = run.args[0].split('/')[-1]
+                     exe = exe.split('\'')[0]
+                 args = []
+
+                 for arg in run.args[1:]:
+                     if arg == '>':
+                         break
+                     args.append(arg)
+  
+                 print("starting command = ", command, " : ", run.name, " exe : ", exe, " args: ", args, " shced_arg: ", run.sched_args,
+                               " env: ", run.env, " working_dir: ", run.working_dir,
+                               " timeout: ", run.timeout, " run_procs: ", run.nprocs, " run_reset", run.res_set,
+                               " stdpath :", run.stdout_path, " stderr :", run.stderr_path,
+                               " return :", run.return_path, " walltime: ", run.walltime_path,
+                               " log : ", run.log_prefix, " sleep:  ", run.sleep_after, " deps on : ", depends_on, " hostfile: ", run.hostfile,
+                               " override : ", run.runner_override, flush=True)
+
+                 new_run = Run( run.name, exe, args, run.sched_args,
+                               run.env, run.working_dir, run.apps_dir, run.machine,
                                run.timeout, run.nprocs, run.res_set,
                                run.stdout_path, run.stderr_path,
                                run.return_path, run.walltime_path,
                                run.log_prefix, run.sleep_after, depends_on, run.hostfile,
-                               run.runner_override )
+                               run.runner_override, run.tau_profiling, run.tau_tracing )
 
-                 #print("command = ", command, flush=True)
+                 print("command = ", command, flush=True)
 
                  if command == "add":
                      if new_run.tasks_per_node is not None:
@@ -1274,7 +1299,10 @@ class Pipeline(object):
                          new_run.nprocs = run.nodes * (len(run.node_config.cpu) + cpu_nodes)
                          new_run.tasks_per_node =len(run.node_config.cpu) + cpu_nodes
                      else: 
-                         new_run.nprocs += cpu_nodes
+                         if new_run.nprocs is not None:
+                             new_run.nprocs += cpu_nodes
+                         else:
+                             new_run.nprocs = cpu_nodes
                  
                  elif command == "del":
                      if new_run.tasks_per_node is not None:
@@ -1300,7 +1328,7 @@ class Pipeline(object):
                  if new_run.nprocs <= 0:
                      return
 
-                 #print("new_run.nprocs = ", new_run.nprocs, " new_run.tasks_per_node = ", new_run.tasks_per_node, " node_config ", run.node_config,  flush = True)
+                 print("new_run.nprocs = ", new_run.nprocs, " new_run.tasks_per_node = ", new_run.tasks_per_node, " node_config ", run.node_config,  flush = True)
                  new_run.nodes = run.nodes
                  new_run.node_config = run.node_config
                  cpu_nodes = None
@@ -1311,7 +1339,7 @@ class Pipeline(object):
                          cpu_nodes =  1
                      gpu_nodes = None #len(run.node_config.gpu) 
                      new_run.nodes_assigned = run.nodes_assigned
-                     #print("run.node_config.gpu = ", run.node_config.gpu, " cpu_nodes ", cpu_nodes, " gpu_nodes ", gpu_nodes, " nnodes ", run.nodes, " nodes_assigned ", run.nodes_assigned,  flush = True)
+                     print("run.node_config.gpu = ", run.node_config.gpu, " cpu_nodes ", cpu_nodes, " gpu_nodes ", gpu_nodes, " nnodes ", run.nodes, " nodes_assigned ", run.nodes_assigned,  flush = True)
                      self.set_dynamic_node_config(new_run, cpu_nodes, cpus, gpu_nodes, gpus)
                      if cpu_nodes < len(cpus):
                          cpus = cpus[cpu_nodes:]
