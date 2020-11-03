@@ -59,7 +59,7 @@ class DTH2GPUNode(MachineNode):
         self.__dict__['__info_type__'] = 'NodeConfig'
         return self.__dict__
 
-class BRGPUNode(MachineNod):
+class BRGPUNode(MachineNode):
     def __init__(self):
         MachineNode.__init__(self, 20, 2)
 

@@ -30,13 +30,15 @@ class DynamicUtil():
            return -1
 
    @staticmethod
-   def generate_rfile(pipeline, tau_fname):
+   def generate_rfile(pipeline, tau_fname, restart = False):
        rfile_json = {}
        rfile_json['node']=[]
-       nodes_assigned = pipeline.get_assigned_nodes()
-       index = 0
+       nodes_assigned = pipeline.get_assigned_nodes() 
+       if restart == True:
+           nodes_assigned = nodes_assigned[0:-1]
+       index = 0 
        for run in pipeline.runs:
-           if run.hold == True:
+           if run.hold == True and run.waitlist == True:
                run.nodes_assigned = []
                run.nprocs = 0
        for asgn_node in nodes_assigned:
@@ -46,19 +48,27 @@ class DynamicUtil():
            node['mapping'] = []
            flag = 0
            for run in pipeline.runs:
-               if run.name == 'rmonitor' or not run.monitor:
-                   continue
-               run_map = {}
-               #print("Run name", run.name,  run.tasks_per_node, run.nodes_assigned)
-               n_ranks_per_node = 0
-               if run.hold == True and asgn_node not in run.nodes_assigned:
+
+               if run.hold == True and run.waitlist == True and asgn_node not in run.nodes_assigned:
                    run.nodes_assigned.append(asgn_node)
-                   run.nprocs += 1
+
+               if run.name == 'rmonitor' or not run.monitor or run.hold == True:
+                   continue
+
+               run_map = {}
+
+               print("Run name", run.name,  run.tasks_per_node, run.nodes_assigned, run.nprocs, flush=True)
+               n_ranks_per_node = 0
+                   #run.nprocs += 2
+
                if run.nodes_assigned is None:
                    n_ranks_per_node = run.tasks_per_node
                    #print("Run name", run.name,  run.tasks_per_node)
                elif asgn_node in run.nodes_assigned: 
-                   n_ranks_per_node = int(run.nprocs/len(run.nodes_assigned))
+                   if run.waitlist == True:
+                       n_ranks_per_node = run.tasks_per_node #int(run.nprocs/len(run.nodes_assigned) -1)
+                   else:
+                       n_ranks_per_node = int(run.nprocs/len(run.nodes_assigned))
                    #print("Run name", run.name,  run.nodes_assigned)
                    #index = DynamicUtil.get_index(run.nodes_assigned, asgn_node)
                if n_ranks_per_node != 0 and (index + 1) * n_ranks_per_node <= run.nprocs: # and run.get_start_time > time.time():
@@ -72,6 +82,10 @@ class DynamicUtil():
            if flag:
                rfile_json['node'].append(node)
            index = index + 1
+
+       for run in pipeline.runs:
+           if run.hold == False and run.waitlist == True:
+               run.waitlist == False
        return rfile_json
 
    @staticmethod

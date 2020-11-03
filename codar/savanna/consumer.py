@@ -8,6 +8,7 @@ import logging
 from shutil import copyfile
 from pathlib import Path
 from queue import Queue
+from codar.savanna.dynamic_util import DynamicUtil
 
 from codar.cheetah.helpers import get_file_size
 from codar.savanna import status
@@ -119,7 +120,15 @@ class PipelineRunner(object):
                 if pipeline.id == pipeline_id:
                     run_names =  pipeline.get_inactive()
         return run_names
- 
+
+
+    def get_rfile(self, pipeline_id, tau_fname, restart=False):
+        rfile = {} 
+        with self.pipelines_lock: 
+            for pipeline in list(self._running_pipelines):
+                if pipeline.id == pipeline_id:
+                    rfile = DynamicUtil.generate_rfile(pipeline, tau_fname, restart)
+        return rfile
 
     def get_active_cres(self, pipeline_id, run_names, all=1):
         with self.pipelines_lock:

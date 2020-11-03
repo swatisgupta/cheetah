@@ -205,6 +205,17 @@ class DynamicControls():
 
     def __policy_readjust_on_cond(self):
         pass
+
+    def _get_highest_priority(self, rnames, pipeline_id):
+        priorities = self.pipeline_rev_priority[pipeline_id]
+        priority = 100
+        position = i = 0
+        for run in rnames:
+            if priorities[run] < priority:
+                priority = priorities[run]
+                position = i
+            i += 1
+        return rnames.pop(position), rnames  
  
     def _decode_and_inact(self, message):
         print("Decoding message ", time.time() )
@@ -362,11 +373,11 @@ class DynamicControls():
                        elif do_change == 1 and n_map['AVG_STEP_TIME'][run] != 0 and n_map['AVG_STEP_TIME'][run] < 0.7 * expected_steptime: # and (n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] or n_map['N_STEPS'][run] == n_map['N_STEPS'][parents] -1 ):
                            n_per_node, m_cpus, m_gpus, rns = self.consumer.get_active_cres(pipeline_id, [run], 0) 
                            #print ("run name ", run, " npernode ", n_per_node, flush = True)
-                           if n_per_node > 1:
+                           if n_per_node > nadjust:
                                print("Adding run ", run , " to dec set") 
                                runs_names_dec.append(run)
                                runs_params[run] = {'cpus_node': str(nadjust), 'command':'del'}
-                               new_per_node -= 2
+                               new_per_node -= nadjust
                                #self.pipeline_runs[pipeline_id][run]['last_killed'] = n_map['N_STEPS'][run] 
                        
                run_names = []
@@ -402,11 +413,11 @@ class DynamicControls():
                    rnames = self.consumer.get_inactive(pipeline_id)
                    #print("Inactive run names ", rnames, flush = True)  
                    if len(rnames) != 0:
-                       r = rnames[0]
+                       r, rnames = self._get_highest_priority(rnames, pipeline_id)
                        runs_names_hold.append(r)  
                        #run_names.append(r)
                        res = len(cpus) - new_per_node
-                       runs_params[rnames[0]] = {'cpus_node':res, 'command':'re-assign'}
+                       runs_params[r] = {'cpus_node':res, 'command':'re-assign'}
                        new_per_node += res
 
                priority = 10000
@@ -458,7 +469,6 @@ class DynamicControls():
                            runs_params[vic_name] = {'cpus_node':res, 'command':'re-assign'} 
                            break
                    #print("CPUS...", cpus," : ", len(cpus), " NEW_PER_NODE...", new_per_node, flush = True )
-
                if len(run_names) > 0 and ((self.machine == 'local' and len(cpus) - n_per_node >= new_per_node) or len(cpus) >= new_per_node):
                    #print("Run names  : ", run_names, " CPUS ", len(cpus), " N_PER_NODE ", n_per_node, " REQUIRED ", new_per_node)
                    print("Stopping and restarting the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", runs_params, "  Timestamp : ", time.time())
@@ -467,9 +477,16 @@ class DynamicControls():
                    self.consumer.restart_pipeline_runs(pipeline_id, run_names, runs_params, cpus, gpus)    
                    print("Stopped and restarted the pipeline : ", pipeline_id, " runs : ", run_names, " with params ", runs_params, "  Timestamp : ", time.time())
                    for runs_x in run_names:
-                       print("Run name  : ", runs_x, " Last killed updated to ", n_map['N_STEPS'][runs_x])
-                       self.pipeline_runs[pipeline_id][runs_x]['last_killed'] =  n_map['N_STEPS'][runs_x]
+                       if runs_x in n_map['N_STEPS'].keys():
+                           print("Run name  : ", runs_x, " Last killed updated to ", n_map['N_STEPS'][runs_x])
+                           self.pipeline_runs[pipeline_id][runs_x]['last_killed'] =  n_map['N_STEPS'][runs_x]
                    refresh = True
+                   rfile = self.consumer.get_rfile(pipeline_id, "tau_metrics", True)
+                   socket = self.pipeline_sockets[pipeline_id]
+                   #time.sleep(60)  
+                   request = self._create_request(model, datetime.datetime.now() - self.starttime , "req:reconfig", rfile)
+                   socket.send_string(request)
+                   message = socket.recv()
                    time.sleep(120)  
                self.timestamp[pipeline_id] = datetime.datetime.now()
         if dereg == True:
@@ -520,8 +537,9 @@ class DynamicControls():
     def _sender(self):   
         keep_requesting = True 
         stop = False
-        time.sleep(60) 
-
+        time.sleep(5) 
+        noskip = True
+        nupdates = 0 
         #print("Sender: Starting....", flush = True) 
         while keep_requesting == True:
             #check if there is a stop request :: ....
@@ -534,7 +552,6 @@ class DynamicControls():
                         #print("Sender: Signing off...")
                         continue
 
-                
                 #print("Checking queued requests:")
                 with self.msg_cond:
                     print(len(self.msg_queue))
@@ -543,9 +560,17 @@ class DynamicControls():
                         self.msg_queue.remove(msg)
                         print("Recieved from runtime monitor : ", msg)
                         sys.stdout.flush()
+                        #nupdate += 1
+                        #refresh = False
+                        #if noskip == True:
+                        #    noskip = False 
                         refresh = self._decode_and_inact(msg)
+                        #if nupdates == 5:
+                        #    refresh = self._decode_and_inact(msg)
+                        #    nupdate = 0
                         if refresh == True:
                             self.msg_queue.clear()
+                            noskip = True 
                 with self.pipeline_cond: 
                     for id in self.active_pipelines:    
                          model = self.pipeline_models[id]

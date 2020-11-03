@@ -25,6 +25,8 @@ from queue import Queue
 import pdb
 import copy
 import json
+from pathlib import Path #python 3.4+
+
 from codar.savanna.dynamic_util import DynamicUtil
 
 from codar.savanna import tau, status, machines, summit_helper, \
@@ -99,6 +101,7 @@ class Run(threading.Thread):
         self.monitor = {}
         self._deliberatily_killed = False
         self.hold = False
+        self.waitlist = False
         self.grace_kill = True
 
         # Get the path to the exe
@@ -110,7 +113,7 @@ class Run(threading.Thread):
         self.tau_tracing = tau_tracing
         self.tau_exec = tau_exec
         if self.tau_profiling or self.tau_tracing:
-            if self.name != "rmonitor":
+            if self.name != "rmonitor" and self.name != "simulation":
                 self._add_tau_support()
                 print("added tau support", flush = True )
 
@@ -532,10 +535,12 @@ class Run(threading.Thread):
         kill_file = self.working_dir + "/kill_run"
         with open(kill_file,"w+") as f:
             f.write("kill")        
-        self._p.wait()
+        self._p.wait() #self.timeout)
         self._pgroup_wait()
         os.remove(kill_file)
-        #self.hold = True
+        for f in Path(self.working_dir).glob("tau*.bp"):
+            p.unlink()
+        self.hold = True
 
     def _pgroup_wait(self):
         """Wait until the process group lead by this run no longer exists.
@@ -840,7 +845,7 @@ class Pipeline(object):
         # self._nodes_assigned = copy.deepcopy(self.nodes_assigned)
         for node in list(self.nodes_assigned.queue):
             self._nodes_assigned.put(node)
-
+        
         self.add_done_callback(consumer.pipeline_finished)
         self.add_fatal_callback(consumer.pipeline_fatal)
 
@@ -895,6 +900,8 @@ class Pipeline(object):
                 rmonitor = run
                 continue
             if run.hold == True:
+                #run.nprocs = 1
+                run.waitlist = True 
                 continue 
             run.start()
             if run.sleep_after:
@@ -1166,6 +1173,7 @@ class Pipeline(object):
         #inact_list = [x for x in self.runs if x not in self._active_runs]
         #print("All runs ", self.runs, " active runs ", self._active_runs, " inactive ", inact_list) 
         inactive_runs =[]
+        priorities = [] 
         for r in self.runs:
             if r.hold == True:
                 inactive_runs.append(r.name)
@@ -1315,10 +1323,15 @@ class Pipeline(object):
                          new_run.nprocs -= cpu_nodes
                  elif command == "re-assign":
                      new_run.tasks_per_node = cpu_nodes
-                     if run.hold == True:  
+                     if run.hold == True and run.waitlist == True:
+                         #nodes_assigned = self.get_assigned_nodes()
+                         #new_run.nodes_assigned = []
+                         #for asgnd in nodes_assigned:
+                         #    new_run.nodes_assigned.append(asgnd)
+                         #run.nodes_assigned = new_run.nodes_assigned    
                          new_run.nprocs = (self.get_nodes_used() - 1) * new_run.tasks_per_node
                          run.nodes = (self.get_nodes_used() - 1)
-                         new_run.hold = False
+                         new_run.waitlist = True
                      else:
                          new_run.nprocs = run.nodes * new_run.tasks_per_node
                      
@@ -1350,13 +1363,15 @@ class Pipeline(object):
                      else:  
                          gpus = [[],[]]
                  with self._state_lock:
+                     print("Pipeline runs before: ", self.runs , flush = True)	
                      new_run.log_prefix = "%s:%s" % (self.id, new_run.name)                    
                      new_run.set_runner(run.runner)
-                     self.runs.append(new_run)	
                      new_run.machine = run.machine
                      new_run.callbacks = run.callbacks
-                     if run.hold == True:
+                     new_run.monitor = run.monitor
+                     if run in self._active_runs:
                          self._active_runs.remove(run) 
+                     if run.hold == True: 
                          run.hold = False
                      self.runs.remove(run)	
                      if new_run.tasks_per_node is not None:
@@ -1364,6 +1379,8 @@ class Pipeline(object):
                      else:
                          new_run.nodes =  new_run.nprocs 
                      print("Now starting a new job...with nprocs ", new_run.nprocs, " nodes ", new_run.nodes, " \n", flush = True ) 	 
+                     self.runs.append(new_run)
+                     print("Pipeline runs after: ", self.runs , flush = True)	
                      self._active_runs.add(new_run)
                      self.total_procs -= run.nprocs
                      self.total_procs += new_run.nprocs
